@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { normalizeNumber, normalizeDate, normalizeIdCode, normalizeTextForMatching } from "../normalize";
+import { normalizeNumber, normalizeDate, normalizeIdCode, normalizeTextForMatching, normalizeOrderId, validateISBN13, normalizeChannel, normalizeOrderStatus, normalizeBrand } from "../normalize";
 import { detectFields, buildRows } from "../fieldMapping";
 import { resolveEntities, tokenSortRatio } from "../entityResolution";
-import { runAllChecks, checkDuplicates } from "../qualityRules";
+import { runAllChecks, checkDuplicates, checkMissingAttributes, checkCrossChannelPrice, checkNullVsZero, checkCategoricalMismatch, checkEncodingIssues, checkStaleData, checkReferentialIntegrity, GROUP_LABELS } from "../qualityRules";
 
 describe("normalizeNumber", () => {
   it("parses plain integer string", () => { expect(normalizeNumber("65000")).toBe(65000); });
@@ -30,6 +30,69 @@ describe("normalizeIdCode", () => {
 describe("normalizeTextForMatching", () => {
   it("removes diacritics and parenthetical annotations", () => {
     expect(normalizeTextForMatching("Nhà Giả Kim (bản đẹp)")).toBe("nha gia kim");
+  });
+});
+
+describe("normalizeOrderId", () => {
+  it("strips invisible characters", () => {
+    expect(normalizeOrderId('\u200BDH001\uFEFF')).toBe('DH001');
+  });
+  it("returns null for null/empty", () => {
+    expect(normalizeOrderId(null)).toBeNull();
+    expect(normalizeOrderId("")).toBeNull();
+  });
+});
+
+describe("validateISBN13", () => {
+  it("valid ISBN", () => {
+    expect(validateISBN13('9780306406157').valid).toBe(true);
+  });
+  it("invalid checksum", () => {
+    expect(validateISBN13('9780306406158').valid).toBe(false);
+  });
+  it("non-13-digit", () => {
+    expect(validateISBN13('123').valid).toBe(false);
+  });
+});
+
+describe("normalizeChannel", () => {
+  it("normalizes to Shopee", () => {
+    expect(normalizeChannel('shopee vn')).toBe('Shopee');
+    expect(normalizeChannel('SHOPEE')).toBe('Shopee');
+  });
+  it("normalizes to TikTok Shop", () => {
+    expect(normalizeChannel('tiktok shop')).toBe('TikTok Shop');
+  });
+  it("normalizes to POS", () => {
+    expect(normalizeChannel('Tại quầy')).toBe('POS');
+  });
+  it("keeps unknown value", () => {
+    expect(normalizeChannel('Zalo Shop')).toBe('Zalo Shop');
+  });
+});
+
+describe("normalizeOrderStatus", () => {
+  it("normalizes to Hoàn thành", () => {
+    expect(normalizeOrderStatus('Đã giao')).toBe('Hoàn thành');
+  });
+  it("normalizes to Đã hủy", () => {
+    expect(normalizeOrderStatus('cancelled')).toBe('Đã hủy');
+  });
+  it("normalizes to Đang xử lý", () => {
+    expect(normalizeOrderStatus('Đang xử lý')).toBe('Đang xử lý');
+  });
+  it("keeps unknown value", () => {
+    expect(normalizeOrderStatus('Chờ hàng')).toBe('Chờ hàng');
+  });
+});
+
+describe("normalizeBrand", () => {
+  it("normalizes to NXB Trẻ", () => {
+    expect(normalizeBrand('NXB Trẻ')).toBe('NXB Trẻ');
+    expect(normalizeBrand('nha xuat ban tre')).toBe('NXB Trẻ');
+  });
+  it("keeps unknown value", () => {
+    expect(normalizeBrand('Alpha Books')).toBe('Alpha Books');
   });
 });
 
@@ -90,12 +153,92 @@ describe("quality rules — severity classification", () => {
     expect(issues[0].severity).toBe("NEEDS_CONFIRMATION");
   });
 
-  it("every issue produced by runAllChecks has a valid severity level", () => {
+  it("checkMissingAttributes flags rows missing key fields based on source", () => {
     const rows = [
-      { ma_don: "DH1", __source: "pos", so_luong: "", gia: "1000", ten_sp: "A", matchStatus: "MATCHED_EXACT", matched: null },
+      { __source: "pos.xlsx", kenh: "" }
+    ];
+    const issues = checkMissingAttributes(rows);
+    expect(issues.length).toBeGreaterThan(0);
+  });
+
+  it("checkCrossChannelPrice flags price diff > 30% for same product across channels", () => {
+    const rows = [
+      { ma_dinh_danh: "SP1", kenh: "Shopee", gia: "100", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" },
+      { ma_dinh_danh: "SP1", kenh: "Lazada", gia: "140", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" }
+    ];
+    const issues = checkCrossChannelPrice(rows);
+    expect(issues.length).toBeGreaterThan(0);
+  });
+
+  it("checkCrossChannelPrice does not flag price diff < 30%", () => {
+    const rows = [
+      { ma_dinh_danh: "SP1", kenh: "Shopee", gia: "100", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" },
+      { ma_dinh_danh: "SP1", kenh: "Lazada", gia: "120", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" }
+    ];
+    const issues = checkCrossChannelPrice(rows);
+    expect(issues.length).toBe(0);
+  });
+
+  it("checkNullVsZero flags gia = '0' but not gia = ''", () => {
+    const rowsZero = [{ gia: "0" }];
+    const issuesZero = checkNullVsZero(rowsZero);
+    expect(issuesZero.length).toBe(1);
+
+    const rowsNull = [{ gia: "" }];
+    const issuesNull = checkNullVsZero(rowsNull);
+    expect(issuesNull.length).toBe(0);
+  });
+
+  it("checkCategoricalMismatch flags unknown channel", () => {
+    const rows = [{ kenh: "Unknown Channel" }];
+    const issues = checkCategoricalMismatch(rows);
+    expect(issues.length).toBeGreaterThan(0);
+  });
+
+  it("checkCategoricalMismatch does not flag known channel", () => {
+    const rows = [{ kenh: "Shopee" }];
+    const issues = checkCategoricalMismatch(rows);
+    const kenhIssues = issues.filter(i => i.field === "kenh");
+    expect(kenhIssues.length).toBe(0);
+  });
+
+  it("checkEncodingIssues flags rows with \\uFFFD", () => {
+    const rows = [{ ten_sp: "L\uFFFDi" }];
+    const issues = checkEncodingIssues(rows);
+    expect(issues.length).toBe(1);
+  });
+
+  it("checkEncodingIssues does not flag clean rows", () => {
+    const rows = [{ ten_sp: "Sản phẩm tốt" }];
+    const issues = checkEncodingIssues(rows);
+    expect(issues.length).toBe(0);
+  });
+
+  it("checkStaleData flags cancelled order with stock and price", () => {
+    const rows = [{ trang_thai: "Đã hủy", so_luong: "5", gia: "100000" }];
+    const issues = checkStaleData(rows);
+    expect(issues.length).toBe(1);
+  });
+
+  it("checkReferentialIntegrity flags UNRESOLVED matchStatus with ma_dinh_danh", () => {
+    const rows = [{ ma_dinh_danh: "XX123", matchStatus: "UNRESOLVED" }];
+    const issues = checkReferentialIntegrity(rows);
+    expect(issues.length).toBe(1);
+  });
+
+  it("every issue produced by runAllChecks has a valid severity AND a valid group", () => {
+    const rows = [
+      { ma_don: "DH1", __source: "pos.xlsx", so_luong: "", gia: "0", ten_sp: "A\uFFFD", matchStatus: "UNRESOLVED", matched: null, ma_dinh_danh: "XX123", trang_thai: "Đã hủy", kenh: "Unknown" },
+      { ma_don: "DH1", __source: "pos.xlsx", so_luong: "1", gia: "1000", ten_sp: "B", matchStatus: "MATCHED_EXACT", matched: null }
     ];
     const issues = runAllChecks(rows);
     const validSeverities = ["AUTO_FIXED", "NEEDS_CONFIRMATION", "FLAGGED_ONLY"];
-    issues.forEach((issue) => expect(validSeverities).toContain(issue.severity));
+    const validGroups = Object.keys(GROUP_LABELS);
+    
+    expect(issues.length).toBeGreaterThan(0);
+    issues.forEach((issue) => {
+      expect(validSeverities).toContain(issue.severity);
+      expect(validGroups).toContain(issue.group);
+    });
   });
 });

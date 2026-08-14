@@ -101,3 +101,143 @@ export function normalizeDate(value) {
 export function isValidDate(value) {
   return normalizeDate(value) !== null;
 }
+
+// ----------------------------------------------------------------------
+// CÁC HÀM BỔ SUNG
+// ----------------------------------------------------------------------
+
+/** 
+ * Chuẩn hóa mã đơn hàng: Trim, xóa các ký tự ẩn/không in được, chuẩn hóa khoảng trắng.
+ * Trả về chuỗi đã dọn dẹp hoặc null.
+ */
+export function normalizeOrderId(value) {
+  if (value === null || value === undefined) return null;
+  let text = String(value).replace(/[\x00-\x1F\x7F-\x9F\u200B-\u200D\uFEFF]/g, "").trim().replace(/\s+/g, " ");
+  return text === "" ? null : text;
+}
+
+/**
+ * Kiểm tra mã ISBN-13 (thuật toán checksum modulo 10).
+ * Input đã được chuẩn hóa (chỉ gồm 13 chữ số).
+ * @param {string} code - Mã cần kiểm tra
+ * @returns {{valid: boolean, cleaned: string}} Kết quả kiểm tra và mã đã chuẩn hóa
+ */
+export function validateISBN13(code) {
+  if (!code || typeof code !== "string" || code.length !== 13 || !/^\d{13}$/.test(code)) {
+    return { valid: false, cleaned: code || "" };
+  }
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const digit = parseInt(code[i], 10);
+    sum += (i % 2 === 0) ? digit : digit * 3;
+  }
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return {
+    valid: checkDigit === parseInt(code[12], 10),
+    cleaned: code
+  };
+}
+
+/**
+ * Kiểm tra mã EAN-13 (Cùng thuật toán checksum với ISBN-13).
+ * @param {string} code - Mã cần kiểm tra
+ * @returns {{valid: boolean, cleaned: string}} Kết quả kiểm tra và mã đã chuẩn hóa
+ */
+export function validateEAN13(code) {
+  return validateISBN13(code);
+}
+
+/**
+ * Chuẩn hóa kênh bán hàng: Ánh xạ các biến thể về dạng chuẩn.
+ * @param {string|null|undefined} value - Giá trị cần chuẩn hóa
+ * @returns {string|null} Tên kênh đã chuẩn hóa
+ */
+export function normalizeChannel(value) {
+  if (value === null || value === undefined) return null;
+  const original = String(value).trim();
+  if (original === "") return null;
+  
+  const matchStr = removeDiacritics(original).toLowerCase().replace(/\s+/g, " ").trim();
+  
+  const map = {
+    'shopee': 'Shopee',
+    'shopee vn': 'Shopee',
+    'shopee.vn': 'Shopee',
+    'lazada': 'Lazada',
+    'lazada vn': 'Lazada',
+    'lazada.vn': 'Lazada',
+    'tiktok': 'TikTok Shop',
+    'tiktok shop': 'TikTok Shop',
+    'tik tok': 'TikTok Shop',
+    'tiktok.com': 'TikTok Shop',
+    'pos': 'POS',
+    'tai quay': 'POS',
+    'cua hang': 'POS',
+    'offline': 'POS',
+    'tai cua hang': 'POS'
+  };
+  
+  return map[matchStr] || original;
+}
+
+/**
+ * Chuẩn hóa trạng thái đơn hàng: Ánh xạ các biến thể về dạng chuẩn.
+ * @param {string|null|undefined} value - Giá trị cần chuẩn hóa
+ * @returns {string|null} Trạng thái đã chuẩn hóa
+ */
+export function normalizeOrderStatus(value) {
+  if (value === null || value === undefined) return null;
+  const original = String(value).trim();
+  if (original === "") return null;
+  
+  const matchStr = removeDiacritics(original).toLowerCase().replace(/\s+/g, " ").trim();
+  
+  const map = {
+    'da giao': 'Hoàn thành',
+    'hoan thanh': 'Hoàn thành',
+    'completed': 'Hoàn thành',
+    'giao thanh cong': 'Hoàn thành',
+    'thanh cong': 'Hoàn thành',
+    'delivered': 'Hoàn thành',
+    'da huy': 'Đã hủy',
+    'cancelled': 'Đã hủy',
+    'canceled': 'Đã hủy',
+    'huy': 'Đã hủy',
+    'huy don': 'Đã hủy',
+    'dang xu ly': 'Đang xử lý',
+    'processing': 'Đang xử lý',
+    'cho xac nhan': 'Đang xử lý',
+    'pending': 'Đang xử lý',
+    'dang giao': 'Đang xử lý',
+    'shipping': 'Đang xử lý',
+    'tra hang': 'Trả hàng',
+    'returned': 'Trả hàng',
+    'hoan tra': 'Trả hàng',
+    'refund': 'Trả hàng'
+  };
+  
+  return map[matchStr] || original;
+}
+
+/**
+ * Chuẩn hóa thương hiệu/nhà xuất bản: Gộp khoảng trắng, áp dụng alias.
+ * @param {string|null|undefined} value - Giá trị cần chuẩn hóa
+ * @returns {string|null} Thương hiệu đã chuẩn hóa
+ */
+export function normalizeBrand(value) {
+  const normValue = normalizeText(value);
+  if (!normValue) return null;
+  
+  const matchStr = removeDiacritics(normValue).toLowerCase().replace(/\s+/g, " ").trim();
+  
+  const map = {
+    'nxb tre': 'NXB Trẻ',
+    'nha xuat ban tre': 'NXB Trẻ',
+    'nxb kim dong': 'NXB Kim Đồng',
+    'nha xuat ban kim dong': 'NXB Kim Đồng',
+    'nxb tong hop': 'NXB Tổng Hợp TP.HCM',
+    'nxb tong hop tphcm': 'NXB Tổng Hợp TP.HCM'
+  };
+  
+  return map[matchStr] || normValue;
+}
