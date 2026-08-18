@@ -1,13 +1,12 @@
 /**
  * Chiến Lược 3: Ghép cặp tối ưu toàn cục (Bipartite Optimal Matching Strategy)
- * Giải quyết triệt để lỗi tranh chấp khớp giữa 2 nguồn và kế thừa bộ nhớ Crosswalk.
+ * Giải quyết triệt để lỗi tranh chấp khớp giữa các nguồn đơn hàng và tự động tổng hợp Master Catalog.
  */
 import { normalizeTextForMatching } from "../normalize";
 import {
   extractUniqueEntitiesFromRows,
   matchBipartiteEntities,
   synthesizeCanonicalCatalog,
-  getProgressiveCrosswalk,
 } from "../bipartiteMatching";
 
 export function executeBipartiteStrategy({ allRows, sourceRowsMap, fuzzyHighThreshold = 90, fuzzyConfirmThreshold = 70 }) {
@@ -21,9 +20,7 @@ export function executeBipartiteStrategy({ allRows, sourceRowsMap, fuzzyHighThre
   const entities1 = extractUniqueEntitiesFromRows(rows1, source1Label);
   const entities2 = extractUniqueEntitiesFromRows(rows2, source2Label);
 
-  const crosswalkMemory = getProgressiveCrosswalk();
   const bipartiteResult = matchBipartiteEntities(entities1, entities2, {
-    crosswalkMemory,
     fuzzyHighThreshold,
     fuzzyConfirmThreshold,
   });

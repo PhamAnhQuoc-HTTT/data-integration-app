@@ -1,80 +1,15 @@
 /**
- * Bipartite Optimal Matching & Progressive Crosswalk Engine
- * (Cơ chế 3: Ghép cặp tối ưu toàn cục + Cơ chế 4: Danh mục tích lũy dần)
+ * Bipartite Optimal Matching Engine
+ * (Cơ chế 3: Ghép cặp tối ưu toàn cục giữa các nguồn đơn hàng)
  * 
  * Áp dụng khi người dùng KHÔNG CÓ file danh mục sản phẩm chuẩn (Master Catalog).
- * Tự động đối chiếu chéo giữa các nguồn đơn hàng (ví dụ: POS vs Shopee / Lazada),
- * giải quyết triệt để vấn đề tranh chấp khớp (conflicts), và tích lũy tri thức
- * từ các lần xác nhận thủ công của người dùng qua Progressive Crosswalk.
+ * Tự động đối chiếu chéo giữa các nguồn đơn hàng (ví dụ: POS vs Shopee / Lazada / FAHASA),
+ * giải quyết triệt để vấn đề tranh chấp khớp (conflicts) bằng giải thuật Best-First Maximum Weight Matching,
+ * và tự động tổng hợp Danh mục sản phẩm chuẩn đại diện (Canonical Catalog).
  */
 
-import { normalizeTextForMatching, normalizeText, normalizeNumber, removeDiacritics } from "./normalize";
+import { normalizeTextForMatching, normalizeNumber, removeDiacritics } from "./normalize";
 import { tokenSortRatio, FUZZY_HIGH_THRESHOLD, FUZZY_CONFIRM_THRESHOLD } from "./entityResolution";
-
-const STORAGE_KEY_PROGRESSIVE_CROSSWALK = "sales_data_progressive_crosswalk_v1";
-
-/**
- * Lấy danh sách Crosswalk đã tích lũy từ LocalStorage (Cơ chế 4)
- */
-export function getProgressiveCrosswalk() {
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const data = localStorage.getItem(STORAGE_KEY_PROGRESSIVE_CROSSWALK);
-      return data ? JSON.parse(data) : [];
-    }
-  } catch (e) {
-    console.warn("Không thể đọc Progressive Crosswalk từ localStorage:", e);
-  }
-  return [];
-}
-
-/**
- * Lưu 1 cặp khớp mới vào Progressive Crosswalk khi người dùng bấm xác nhận thủ công
- */
-export function saveProgressiveCrosswalkPair(keyA, keyB, canonicalProduct) {
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      const current = getProgressiveCrosswalk();
-      const normA = normalizeTextForMatching(keyA);
-      const normB = normalizeTextForMatching(keyB);
-      
-      // Xóa bản ghi cũ nếu đã có
-      const filtered = current.filter(
-        (item) => !(item.normA === normA && item.normB === normB) && !(item.normA === normB && item.normB === normA)
-      );
-
-      filtered.push({
-        keyA,
-        keyB,
-        normA,
-        normB,
-        canonical: canonicalProduct,
-        timestamp: new Date().toISOString(),
-      });
-
-      localStorage.setItem(STORAGE_KEY_PROGRESSIVE_CROSSWALK, JSON.stringify(filtered));
-      return true;
-    }
-  } catch (e) {
-    console.warn("Không thể lưu Progressive Crosswalk:", e);
-  }
-  return false;
-}
-
-/**
- * Xóa toàn bộ bộ nhớ Progressive Crosswalk (để reset thử nghiệm)
- */
-export function clearProgressiveCrosswalk() {
-  try {
-    if (typeof window !== "undefined" && window.localStorage) {
-      localStorage.removeItem(STORAGE_KEY_PROGRESSIVE_CROSSWALK);
-      return true;
-    }
-  } catch (e) {
-    console.warn("Không thể xóa Progressive Crosswalk:", e);
-  }
-  return false;
-}
 
 /**
  * Trích xuất danh sách các thực thể sản phẩm duy nhất (Unique Entities) từ 1 nguồn đơn hàng
@@ -122,7 +57,6 @@ export function extractUniqueEntitiesFromRows(rows, sourceLabel) {
   });
 
   return Array.from(entityMap.values()).map((e) => {
-    // Tính giá trung vị/trung bình của sản phẩm trong nguồn
     let avgPrice = 0;
     if (e.prices.length > 0) {
       const sum = e.prices.reduce((a, b) => a + b, 0);
@@ -137,14 +71,12 @@ export function extractUniqueEntitiesFromRows(rows, sourceLabel) {
 
 /**
  * Cơ chế 3: Ghép cặp tối ưu toàn cục (Bipartite Matching with Conflict Resolution)
- * Kết hợp Cơ chế 4 (Progressive Crosswalk Memory)
  * 
  * @param {Array} entitiesA - Danh sách thực thể từ Nguồn A
  * @param {Array} entitiesB - Danh sách thực thể từ Nguồn B
- * @param {Object} options - Cấu hình (threshold, progressive crosswalk)
+ * @param {Object} options - Cấu hình (threshold)
  */
 export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
-  const crosswalkMemory = options.crosswalkMemory || getProgressiveCrosswalk();
   const highThreshold = options.fuzzyHighThreshold || FUZZY_HIGH_THRESHOLD;
   const confirmThreshold = options.fuzzyConfirmThreshold || FUZZY_CONFIRM_THRESHOLD;
 
@@ -153,36 +85,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
   const matchedSetB = new Set();
 
   // -------------------------------------------------------------
-  // Bước 1: Kiểm tra Progressive Crosswalk (Cơ chế 4 - Tích lũy dần)
-  // -------------------------------------------------------------
-  for (const itemA of entitiesA) {
-    for (const itemB of entitiesB) {
-      if (matchedSetA.has(itemA.entityKey) || matchedSetB.has(itemB.entityKey)) continue;
-
-      const inMemory = crosswalkMemory.some((cw) => {
-        const matchAB =
-          (cw.normA === itemA.ten_sp_norm && cw.normB === itemB.ten_sp_norm) ||
-          (cw.normA === itemB.ten_sp_norm && cw.normB === itemA.ten_sp_norm);
-        return matchAB;
-      });
-
-      if (inMemory) {
-        matchedPairs.push({
-          entityA: itemA,
-          entityB: itemB,
-          score: 100,
-          method: "PROGRESSIVE_CROSSWALK",
-          status: "MATCHED_EXACT",
-          tier: "tier_progressive_crosswalk",
-        });
-        matchedSetA.add(itemA.entityKey);
-        matchedSetB.add(itemB.entityKey);
-      }
-    }
-  }
-
-  // -------------------------------------------------------------
-  // Bước 2: Khớp chính xác theo Mã định danh (ISBN/Barcode)
+  // Bước 1: Khớp chính xác theo Mã định danh (ISBN/Barcode/SKU)
   // -------------------------------------------------------------
   for (const itemA of entitiesA) {
     if (matchedSetA.has(itemA.entityKey) || !itemA.ma_dinh_danh) continue;
@@ -207,8 +110,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
   }
 
   // -------------------------------------------------------------
-  // Bước 3: Ghép cặp tối ưu toàn cục (Bipartite Conflict-Free Matching)
-  // Tính ma trận tương đồng cho tất cả các cặp còn lại và phân bổ tối ưu
+  // Bước 2: Ghép cặp tối ưu toàn cục (Bipartite Conflict-Free Matching)
   // -------------------------------------------------------------
   const candidatePairs = [];
 
@@ -258,7 +160,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
   }
 
   // -------------------------------------------------------------
-  // Bước 4: Tập hợp các thực thể không khớp (Đặc thù của từng nguồn)
+  // Bước 3: Tập hợp các thực thể không khớp (Đặc thù của từng nguồn)
   // -------------------------------------------------------------
   const unmatchedA = entitiesA.filter((e) => !matchedSetA.has(e.entityKey));
   const unmatchedB = entitiesB.filter((e) => !matchedSetB.has(e.entityKey));
@@ -282,12 +184,10 @@ export function synthesizeCanonicalCatalog(bipartiteResult) {
     const a = pair.entityA;
     const b = pair.entityB;
 
-    // Chọn tên giàu thông tin nhất
     const chosenTitle = a.ten_sp.length >= b.ten_sp.length ? a.ten_sp : b.ten_sp;
     const chosenId = a.ma_dinh_danh || b.ma_dinh_danh || `GEN-${String(idx + 1).padStart(4, "0")}`;
     const chosenBrand = a.thuong_hieu || b.thuong_hieu || "";
     
-    // Giá tham chiếu: lấy trung bình các nguồn có giá
     const validPrices = [a.gia_chuan, b.gia_chuan].filter((p) => p > 0);
     const avgPrice = validPrices.length > 0 ? Math.round(validPrices.reduce((x, y) => x + y, 0) / validPrices.length) : 0;
 

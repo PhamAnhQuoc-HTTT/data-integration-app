@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import * as XLSX from "xlsx";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -6,18 +6,12 @@ import {
 import {
   UploadCloud, Layers, Package, CheckCircle2, AlertTriangle,
   RotateCcw, Download, BarChart3, Table2, ListChecks, Loader2, ArrowRight, Trash2,
-  Settings, ShieldCheck, Check, X, Sliders, FileText, Sparkles, Database, BookmarkCheck,
-  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle, Store
+  Settings, ShieldCheck, Check, X, Sliders, FileText, Sparkles,
+  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle
 } from "lucide-react";
 import { detectFields, FIELD_LABELS } from "./logic/fieldMapping";
 import { runPipeline } from "./logic/pipeline";
 import { SEVERITY_LABELS, GROUP_LABELS } from "./logic/qualityRules";
-import { DOMAINS } from "./logic/domainConfig";
-import {
-  saveProgressiveCrosswalkPair,
-  getProgressiveCrosswalk,
-  clearProgressiveCrosswalk,
-} from "./logic/bipartiteMatching";
 
 /* ============================== DESIGN TOKENS ============================== */
 const Tokens = () => (
@@ -331,21 +325,16 @@ export default function DataIntegrationTool() {
   const [parseError, setParseError] = useState("");
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // Progressive Crosswalk & Manual Confirmations
+  // Manual Confirmations state
   const [manualConfirmations, setManualConfirmations] = useState(new Map());
-  const [crosswalkCount, setCrosswalkCount] = useState(0);
 
   // 3 Gói cấu hình nghiệp vụ
   const [activePresetId, setActivePresetId] = useState("balanced");
   const [hoveredPresetId, setHoveredPresetId] = useState(null);
   const [showAdvancedParams, setShowAdvancedParams] = useState(false);
 
-  // Configuration settings (Mở rộng 3)
+  // Configuration settings
   const [config, setConfig] = useState({ ...PRESETS.balanced.config });
-
-  useEffect(() => {
-    setCrosswalkCount(getProgressiveCrosswalk().length);
-  }, []);
 
   const handleSelectPreset = (presetKey) => {
     setActivePresetId(presetKey);
@@ -401,7 +390,6 @@ export default function DataIntegrationTool() {
     await delay(500); setProcIdx(2);
     await delay(500);
 
-    // Sử dụng Cơ Chế 3 (BIPARTITE) làm chiến lược mặc định khi không có catalog file
     const pipelineOptions = {
       resolutionStrategy: "BIPARTITE",
       fuzzyHighThreshold: config.fuzzyHighThreshold,
@@ -446,18 +434,6 @@ export default function DataIntegrationTool() {
       next.set(rowIndex, { decision, item });
       return next;
     });
-
-    if (decision === "ACCEPT" && item.matched) {
-      saveProgressiveCrosswalkPair(item.ten_sp, item.matched.ten_sp, item.matched);
-      setCrosswalkCount(getProgressiveCrosswalk().length);
-    }
-  };
-
-  const handleClearCrosswalk = () => {
-    if (window.confirm("Bạn có chắc muốn xóa toàn bộ bộ nhớ Progressive Crosswalk tích lũy?")) {
-      clearProgressiveCrosswalk();
-      setCrosswalkCount(0);
-    }
   };
 
   const exportSummaryFile = () => {
@@ -590,7 +566,7 @@ export default function DataIntegrationTool() {
               )}
 
               {/* Phần Cấu Hình Nâng Cao (Thu gọn) */}
-              <div className="border-t pt-3 mb-4" style={{ borderColor: "var(--line)" }}>
+              <div className="border-t pt-3 mb-2" style={{ borderColor: "var(--line)" }}>
                 <button
                   onClick={() => setShowAdvancedParams(!showAdvancedParams)}
                   className="flex items-center justify-between w-full text-[12.5px] font-semibold text-gray-700 hover:text-amber-800"
@@ -617,7 +593,7 @@ export default function DataIntegrationTool() {
                         className="w-full"
                       />
                       <span className="text-[11px] text-gray-500 block mt-0.5">
-                        Điểm từ {config.fuzzyConfirmThreshold}% trở lên sẽ được xem xét và chuyển sang danh sách Cần xác nhận.
+                        Điểm từ {config.fuzzyConfirmThreshold}% trở lên sẽ được chuyển sang danh sách Cần xác nhận thủ công.
                       </span>
                     </div>
 
@@ -658,25 +634,6 @@ export default function DataIntegrationTool() {
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Bộ nhớ Progressive Crosswalk */}
-              <div className="p-3 rounded border" style={{ borderColor: "var(--line)", background: "var(--paper)" }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-[12px] flex items-center gap-1.5">
-                      <BookmarkCheck size={14} style={{ color: "var(--moss)" }} /> Progressive Crosswalk (Học Tích Lũy)
-                    </p>
-                    <p className="text-[11.5px]" style={{ color: "var(--ink-soft)" }}>
-                      Đã ghi nhớ <strong>{crosswalkCount}</strong> cặp sản phẩm từ các lần bạn xác nhận thủ công.
-                    </p>
-                  </div>
-                  {crosswalkCount > 0 && (
-                    <button onClick={handleClearCrosswalk} className="text-[11.5px] text-red-700 underline font-medium">
-                      Xóa bộ nhớ
-                    </button>
-                  )}
-                </div>
               </div>
 
               <div className="mt-5 flex justify-end gap-2">
@@ -871,16 +828,11 @@ export default function DataIntegrationTool() {
 
             {activeTab === "manual_confirm" && (
               <div className="bsi-card p-5">
-                <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <h3 className="bsi-serif text-[15px] font-semibold mb-1">Xác Nhận Thủ Công & Học Tích Lũy (Progressive Crosswalk)</h3>
-                    <p className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
-                      Khi bạn bấm <strong>Chấp nhận</strong>, hệ thống sẽ tự động ghi nhớ liên kết này vào bộ nhớ để các lần tích hợp sau chính xác 100%.
-                    </p>
-                  </div>
-                  <span className="text-[12px] bsi-mono px-2 py-1 bg-amber-100 text-amber-800 rounded">
-                    Bộ nhớ tích lũy: {crosswalkCount} cặp
-                  </span>
+                <div className="mb-4">
+                  <h3 className="bsi-serif text-[15px] font-semibold mb-1">Xác Nhận Thủ Công Các Cặp Nghi Vấn (Human-in-the-Loop)</h3>
+                  <p className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
+                    Danh sách các sản phẩm có độ tương đồng mờ nằm trong khoảng nghi vấn ({config.fuzzyConfirmThreshold}% - {config.fuzzyHighThreshold}%). Hãy duyệt xác nhận ghép hoặc từ chối để đảm bảo độ chính xác dữ liệu.
+                  </p>
                 </div>
                 {result.pendingConfirmations.length === 0 ? (
                   <p className="p-6 text-center text-[13px]" style={{ color: "var(--moss)" }}>
@@ -909,7 +861,7 @@ export default function DataIntegrationTool() {
                               onClick={() => handleManualDecision(idx, "ACCEPT", item)}
                               className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "ACCEPT" ? "bsi-btn-primary" : "bsi-btn-secondary"}`}
                             >
-                              <Check size={13} /> Chấp nhận đề xuất (Lưu Crosswalk)
+                              <Check size={13} /> Chấp nhận ghép
                             </button>
                             <button
                               onClick={() => handleManualDecision(idx, "REJECT", item)}
@@ -919,7 +871,7 @@ export default function DataIntegrationTool() {
                             </button>
                             {manual && (
                               <span className="text-[11.5px] font-medium self-center ml-auto" style={{ color: "var(--moss)" }}>
-                                ✓ Đã ghi nhận: {manual.decision === "ACCEPT" ? "Đã lưu vào bộ nhớ Crosswalk" : "Đã từ chối khớp"}
+                                ✓ Đã ghi nhận: {manual.decision === "ACCEPT" ? "Đã chấp nhận ghép" : "Đã từ chối ghép"}
                               </span>
                             )}
                           </div>
