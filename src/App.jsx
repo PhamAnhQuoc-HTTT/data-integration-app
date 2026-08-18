@@ -6,7 +6,8 @@ import {
 import {
   UploadCloud, Layers, Package, CheckCircle2, AlertTriangle,
   RotateCcw, Download, BarChart3, Table2, ListChecks, Loader2, ArrowRight, Trash2,
-  Settings, ShieldCheck, Check, X, Sliders, FileText, Sparkles, Database, BookmarkCheck
+  Settings, ShieldCheck, Check, X, Sliders, FileText, Sparkles, Database, BookmarkCheck,
+  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle
 } from "lucide-react";
 import { detectFields, FIELD_LABELS } from "./logic/fieldMapping";
 import { runPipeline } from "./logic/pipeline";
@@ -96,6 +97,64 @@ const PROCESSING_STEPS = [
 
 const MAX_ORDER_FILES = 4;
 
+/* ============================== 3 GÓI CẤU HÌNH DOANH NGHIỆP ============================== */
+const PRESETS = {
+  balanced: {
+    id: "balanced",
+    icon: Target,
+    name: "Tiêu Chuẩn (Khuyên dùng)",
+    badge: "Cân bằng tối ưu",
+    badgeColor: "var(--moss)",
+    badgeBg: "var(--moss-soft)",
+    shortDesc: "Cân bằng giữa độ chính xác và tính tự động cho bán lẻ hàng ngày.",
+    detail: "Tự động chuẩn hóa các biến thể tên thông thường (bỏ dấu, viết tắt). Chỉ yêu cầu người dùng xác nhận khi độ tương đồng nằm trong khoảng nghi ngờ (70% - 90%) và cảnh báo khi giá bán chênh lệch > 30% so với giá chuẩn.",
+    suitableFor: "Doanh nghiệp bán lẻ đa kênh thông thường (POS + Shopee / TikTok Shop).",
+    config: {
+      fuzzyConfirmThreshold: 70,
+      fuzzyHighThreshold: 90,
+      priceDeviationThreshold: 30,
+      autoNormalizeChannels: true,
+      autoNormalizeStatus: true,
+    }
+  },
+  strict: {
+    id: "strict",
+    icon: Shield,
+    name: "Nghiêm Ngặt (Kế toán / Kiểm toán)",
+    badge: "Chính xác cao",
+    badgeColor: "var(--brick)",
+    badgeBg: "var(--brick-soft)",
+    shortDesc: "Ưu tiên tối đa độ chính xác tuyệt đối, tăng cường cảnh báo kiểm duyệt.",
+    detail: "Chỉ tự động ghép khi tên sản phẩm gần như giống hệt nhau (≥ 95%). Cảnh báo ngay khi giá bán chênh lệch trên 15% so với giá chuẩn để tránh thất thoát doanh thu và đảm bảo số liệu báo cáo tài chính tuyệt đối tin cậy.",
+    suitableFor: "Đối soát kế toán, quyết toán thuế, chốt công nợ cuối tháng.",
+    config: {
+      fuzzyConfirmThreshold: 85,
+      fuzzyHighThreshold: 95,
+      priceDeviationThreshold: 15,
+      autoNormalizeChannels: true,
+      autoNormalizeStatus: true,
+    }
+  },
+  relaxed: {
+    id: "relaxed",
+    icon: Zap,
+    name: "Tự Động Tối Đa (Bán lẻ đa sàn)",
+    badge: "Nhanh & Tự động",
+    badgeColor: "#7A5A15",
+    badgeBg: "var(--brass-soft)",
+    shortDesc: "Nới lỏng đối chiếu, giảm tối đa số dòng phải duyệt thủ công.",
+    detail: "Tự động chấp nhận các biến thể tên viết tắt, thiếu dấu hoặc có thêm phụ kiện (ngưỡng tương đồng nới lỏng xuống ≥ 80%), cho phép giá bán lệch đến 50% trước khi gắn cờ cảnh báo. Giúp xử lý cực nhanh các file xuất từ nhiều sàn TMĐT hỗn loạn.",
+    suitableFor: "Báo cáo nhanh xu hướng thị trường, xử lý khối lượng lớn đơn hàng online.",
+    config: {
+      fuzzyConfirmThreshold: 55,
+      fuzzyHighThreshold: 80,
+      priceDeviationThreshold: 50,
+      autoNormalizeChannels: true,
+      autoNormalizeStatus: true,
+    }
+  }
+};
+
 /* ============================== UI SUBCOMPONENTS ============================== */
 function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dragOverKey, setDragOverKey }) {
   const inputId = "bsi-file-orders";
@@ -116,7 +175,7 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dra
         <h3 className="bsi-serif font-semibold text-[15px]">Tệp Đơn Hàng Các Kênh (Tối thiểu 1 hoặc 2 tệp)</h3>
       </div>
       <p className="text-[12.5px] mb-3" style={{ color: "var(--ink-soft)" }}>
-        Kéo thả 2 hoặc nhiều tệp đơn hàng từ POS tại quầy và các sàn TMĐT (Shopee, Lazada, TikTok Shop).
+        Kéo thả 2 hoặc nhiều tệp đơn hàng từ POS tại quầy và các sàn TMĐT (Shopee, Lazada, TikTok Shop, FAHASA).
       </p>
       {!full && (
         <>
@@ -149,9 +208,14 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dra
                 </div>
               </div>
               <div className="flex flex-wrap gap-1 mt-2">
-                {Object.entries(fileState.mapping).filter(([, idx]) => idx >= 0).map(([f]) => (
+                {Object.entries(fileState.mapping).filter(([k, idx]) => k !== "branchColumns" && idx >= 0).map(([f]) => (
                   <span key={f} className="bsi-badge" style={{ background: "var(--paper)", color: "var(--ink-soft)" }}>{FIELD_LABELS[f]}</span>
                 ))}
+                {fileState.mapping.branchColumns && fileState.mapping.branchColumns.length > 0 && (
+                  <span className="bsi-badge" style={{ background: "var(--brass-soft)", color: "#7A5A15" }}>
+                    ✓ Đa chi nhánh ({fileState.mapping.branchColumns.length} NS)
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -209,7 +273,7 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
             </div>
           </div>
           <div className="flex flex-wrap gap-1 mt-2">
-            {Object.entries(fileState.mapping).filter(([, i]) => i >= 0).map(([f]) => (
+            {Object.entries(fileState.mapping).filter(([k, i]) => k !== "branchColumns" && i >= 0).map(([f]) => (
               <span key={f} className="bsi-badge" style={{ background: "var(--paper)", color: "var(--ink-soft)" }}>{FIELD_LABELS[f]}</span>
             ))}
           </div>
@@ -274,18 +338,27 @@ export default function DataIntegrationTool() {
   const [manualConfirmations, setManualConfirmations] = useState(new Map());
   const [crosswalkCount, setCrosswalkCount] = useState(0);
 
+  // 3 Gói cấu hình nghiệp vụ
+  const [activePresetId, setActivePresetId] = useState("balanced");
+  const [hoveredPresetId, setHoveredPresetId] = useState(null);
+  const [showAdvancedParams, setShowAdvancedParams] = useState(false);
+
   // Configuration settings (Mở rộng 3)
-  const [config, setConfig] = useState({
-    fuzzyConfirmThreshold: 70,
-    fuzzyHighThreshold: 90,
-    priceDeviationThreshold: 30,
-    autoNormalizeChannels: true,
-    autoNormalizeStatus: true,
-  });
+  const [config, setConfig] = useState({ ...PRESETS.balanced.config });
 
   useEffect(() => {
     setCrosswalkCount(getProgressiveCrosswalk().length);
   }, []);
+
+  const handleSelectPreset = (presetKey) => {
+    setActivePresetId(presetKey);
+    setConfig({ ...PRESETS[presetKey].config });
+  };
+
+  const handleCustomParamChange = (field, value) => {
+    setActivePresetId("custom");
+    setConfig((prev) => ({ ...prev, [field]: value }));
+  };
 
   const parseToFileState = async (file) => {
     const buf = await file.arrayBuffer();
@@ -363,6 +436,7 @@ export default function DataIntegrationTool() {
       integrationMode,
       bipartiteStats,
       synthesizedCatalog,
+      activePreset: activePresetId !== "custom" ? PRESETS[activePresetId].name : "Tùy chỉnh riêng",
       fileBreakdown: orderFiles.map((f) => `${f.fileName} (${f.dataRows.length})`).join(" · "),
     });
     setStep("results");
@@ -424,6 +498,8 @@ export default function DataIntegrationTool() {
 
   const CHART_COLORS = ["#A97B25", "#4C7458", "#9C4A3B", "#2C3E4A", "#7A8B76", "#C9A45C"];
 
+  const currentPreviewPreset = hoveredPresetId ? PRESETS[hoveredPresetId] : activePresetId !== "custom" ? PRESETS[activePresetId] : null;
+
   return (
     <div className="bsi-root w-full">
       <Tokens />
@@ -437,7 +513,7 @@ export default function DataIntegrationTool() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowConfigModal(true)} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-3.5 py-2">
-              <Sliders size={14} /> Cấu hình xử lý
+              <Sliders size={14} /> Cấu hình xử lý: <span className="font-bold text-amber-900">{activePresetId !== "custom" ? PRESETS[activePresetId].name.split("(")[0].trim() : "Tùy chỉnh"}</span>
             </button>
             {step === "results" && (
               <>
@@ -452,45 +528,165 @@ export default function DataIntegrationTool() {
           </div>
         </div>
 
-        {/* Modal Cấu hình xử lý (Mở rộng 3) */}
+        {/* Modal Cấu hình xử lý thông minh theo 3 Gói Nghiệp Vụ (Mở rộng 3) */}
         {showConfigModal && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-            <div className="bsi-card max-w-lg w-full p-6 shadow-xl relative" style={{ background: "var(--paper-card)" }}>
+            <div className="bsi-card max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto" style={{ background: "var(--paper-card)" }}>
               <div className="flex items-center justify-between mb-4 border-b pb-3" style={{ borderColor: "var(--line)" }}>
                 <div className="flex items-center gap-2">
                   <Sliders size={18} style={{ color: "var(--brass)" }} />
-                  <h3 className="bsi-serif text-lg font-semibold">Cấu Hình Xử Lý Dữ Liệu</h3>
+                  <div>
+                    <h3 className="bsi-serif text-lg font-semibold leading-none">Cấu Hình Xử Lý Dữ Liệu</h3>
+                    <p className="text-[11.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Lựa chọn gói quy tắc phù hợp với mục đích kinh doanh của bạn</p>
+                  </div>
                 </div>
                 <button onClick={() => setShowConfigModal(false)} aria-label="Đóng"><X size={18} /></button>
               </div>
-              <div className="space-y-4 text-[13px]">
-                <div>
-                  <label className="font-semibold block mb-1">Ngưỡng đối chiếu mờ (Fuzzy Confirm Threshold): {config.fuzzyConfirmThreshold}%</label>
-                  <input type="range" min="50" max="90" value={config.fuzzyConfirmThreshold}
-                    onChange={(e) => setConfig({ ...config, fuzzyConfirmThreshold: Number(e.target.value) })} className="w-full" />
-                  <span className="text-[11.5px]" style={{ color: "var(--ink-soft)" }}>Điểm tương đồng từ {config.fuzzyConfirmThreshold}% sẽ được chuyển sang danh sách Cần xác nhận.</span>
-                </div>
-                <div>
-                  <label className="font-semibold block mb-1">Ngưỡng lệch giá cảnh báo: {config.priceDeviationThreshold}%</label>
-                  <input type="range" min="10" max="50" value={config.priceDeviationThreshold}
-                    onChange={(e) => setConfig({ ...config, priceDeviationThreshold: Number(e.target.value) })} className="w-full" />
-                  <span className="text-[11.5px]" style={{ color: "var(--ink-soft)" }}>Cảnh báo khi giá bán chênh quá {config.priceDeviationThreshold}% so với giá chuẩn catalog.</span>
-                </div>
-                
-                <div className="p-3 rounded border" style={{ borderColor: "var(--line)", background: "var(--paper)" }}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold flex items-center gap-1.5"><BookmarkCheck size={15} style={{ color: "var(--moss)" }} /> Progressive Crosswalk (Cơ chế 4)</p>
-                      <p className="text-[11.5px]" style={{ color: "var(--ink-soft)" }}>Đã tích lũy <strong>{crosswalkCount}</strong> cặp liên kết từ người dùng.</p>
-                    </div>
-                    {crosswalkCount > 0 && (
-                      <button onClick={handleClearCrosswalk} className="text-[11.5px] text-red-700 underline">Xóa bộ nhớ</button>
-                    )}
-                  </div>
+
+              {/* 3 Gói Cấu Hình Định Sẵn */}
+              <div className="space-y-2.5 mb-4">
+                <p className="text-[12px] font-semibold uppercase tracking-wider text-gray-500">1. Chọn Gói Cấu Hình Theo Nhu Cầu</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  {Object.entries(PRESETS).map(([key, p]) => {
+                    const IconComponent = p.icon;
+                    const isSelected = activePresetId === key;
+                    return (
+                      <div
+                        key={key}
+                        onClick={() => handleSelectPreset(key)}
+                        onMouseEnter={() => setHoveredPresetId(key)}
+                        onMouseLeave={() => setHoveredPresetId(null)}
+                        className={`p-3 rounded border cursor-pointer transition relative flex flex-col justify-between ${
+                          isSelected ? "border-amber-700 bg-amber-50 shadow-sm" : "border-gray-200 hover:border-amber-400 bg-white"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <IconComponent size={16} style={{ color: isSelected ? "var(--brass)" : "var(--ink-soft)" }} />
+                            <span className="text-[10.5px] px-1.5 py-0.5 rounded font-semibold" style={{ background: p.badgeBg, color: p.badgeColor }}>
+                              {p.badge}
+                            </span>
+                          </div>
+                          <h4 className="font-semibold text-[12.5px] mb-1 leading-tight">{p.name.split("(")[0]}</h4>
+                          <p className="text-[11px] text-gray-600 line-clamp-2">{p.shortDesc}</p>
+                        </div>
+                        <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[10.5px] text-gray-500">
+                          <span>Rê chuột để xem</span>
+                          <HelpCircle size={12} />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              <div className="mt-6 flex justify-end gap-2">
-                <button onClick={() => setShowConfigModal(false)} className="bsi-btn-primary px-4 py-1.5 text-[13px]">Lưu cấu hình</button>
+
+              {/* Khung Chi Tiết & Mô Tả Khi Hover */}
+              {currentPreviewPreset && (
+                <div className="p-3.5 rounded border mb-4 text-[12px] transition-all" style={{ background: "var(--paper)", borderColor: "var(--brass)" }}>
+                  <div className="flex items-center gap-1.5 font-semibold text-amber-900 mb-1">
+                    <Info size={14} /> Chi tiết gói: {currentPreviewPreset.name}
+                  </div>
+                  <p className="text-gray-700 leading-relaxed mb-2">{currentPreviewPreset.detail}</p>
+                  <div className="text-[11.5px] text-gray-600 bg-white/70 p-2 rounded border border-gray-200">
+                    <strong>🎯 Phù hợp nhất cho:</strong> {currentPreviewPreset.suitableFor}
+                  </div>
+                </div>
+              )}
+
+              {/* Phần Cấu Hình Nâng Cao (Thu gọn) */}
+              <div className="border-t pt-3 mb-4" style={{ borderColor: "var(--line)" }}>
+                <button
+                  onClick={() => setShowAdvancedParams(!showAdvancedParams)}
+                  className="flex items-center justify-between w-full text-[12.5px] font-semibold text-gray-700 hover:text-amber-800"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Settings size={14} /> 2. Tùy Chỉnh Tham Số Chuyên Sâu (Dành Cho Kỹ Thuật)
+                  </span>
+                  {showAdvancedParams ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+
+                {showAdvancedParams && (
+                  <div className="mt-3.5 space-y-3.5 bg-white p-3.5 rounded border border-gray-200 text-[12px]">
+                    <div>
+                      <div className="flex justify-between font-semibold mb-1">
+                        <span>Ngưỡng đối chiếu mờ (Fuzzy Confirm): {config.fuzzyConfirmThreshold}%</span>
+                        <span className="text-gray-500 text-[11px]">Mặc định: 70%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="40"
+                        max="90"
+                        value={config.fuzzyConfirmThreshold}
+                        onChange={(e) => handleCustomParamChange("fuzzyConfirmThreshold", Number(e.target.value))}
+                        className="w-full"
+                      />
+                      <span className="text-[11px] text-gray-500 block mt-0.5">
+                        Điểm từ {config.fuzzyConfirmThreshold}% trở lên sẽ được xem xét và chuyển sang danh sách Cần xác nhận.
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-semibold mb-1">
+                        <span>Ngưỡng khớp chắc chắn (Fuzzy High): {config.fuzzyHighThreshold}%</span>
+                        <span className="text-gray-500 text-[11px]">Mặc định: 90%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="75"
+                        max="99"
+                        value={config.fuzzyHighThreshold}
+                        onChange={(e) => handleCustomParamChange("fuzzyHighThreshold", Number(e.target.value))}
+                        className="w-full"
+                      />
+                      <span className="text-[11px] text-gray-500 block mt-0.5">
+                        Điểm từ {config.fuzzyHighThreshold}% trở lên được tự động chấp nhận khớp.
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between font-semibold mb-1">
+                        <span>Ngưỡng cảnh báo lệch giá: {config.priceDeviationThreshold}%</span>
+                        <span className="text-gray-500 text-[11px]">Mặc định: 30%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="60"
+                        value={config.priceDeviationThreshold}
+                        onChange={(e) => handleCustomParamChange("priceDeviationThreshold", Number(e.target.value))}
+                        className="w-full"
+                      />
+                      <span className="text-[11px] text-gray-500 block mt-0.5">
+                        Gắn cờ cảnh báo khi giá bán lệch quá {config.priceDeviationThreshold}% so với giá chuẩn catalog.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bộ nhớ Progressive Crosswalk */}
+              <div className="p-3 rounded border" style={{ borderColor: "var(--line)", background: "var(--paper)" }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-[12px] flex items-center gap-1.5">
+                      <BookmarkCheck size={14} style={{ color: "var(--moss)" }} /> Progressive Crosswalk (Học Tích Lũy)
+                    </p>
+                    <p className="text-[11.5px]" style={{ color: "var(--ink-soft)" }}>
+                      Đã ghi nhớ <strong>{crosswalkCount}</strong> cặp sản phẩm từ các lần bạn xác nhận thủ công.
+                    </p>
+                  </div>
+                  {crosswalkCount > 0 && (
+                    <button onClick={handleClearCrosswalk} className="text-[11.5px] text-red-700 underline font-medium">
+                      Xóa bộ nhớ
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button onClick={() => setShowConfigModal(false)} className="bsi-btn-primary px-5 py-2 text-[13px]">
+                  Áp dụng cấu hình
+                </button>
               </div>
             </div>
           </div>
@@ -581,11 +777,16 @@ export default function DataIntegrationTool() {
                   {result.stats.totalRows} giao dịch từ {orderFiles.length} tệp đơn hàng · {result.stats.catalogSize} sản phẩm trong danh mục
                 </span>
               </div>
-              <span className="bsi-badge" style={{ background: "var(--navy)", color: "#fff" }}>
-                {result.integrationMode === "MASTER_CATALOG" ? "Chế độ: Có Master Catalog"
-                  : result.integrationMode === "BIPARTITE_MATCHING" ? "Cơ chế: Ghép cặp tối ưu (Bipartite + Crosswalk)"
-                  : "Cơ chế: Nguồn chuẩn chỉ định"}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>
+                  Gói: {result.activePreset}
+                </span>
+                <span className="bsi-badge" style={{ background: "var(--navy)", color: "#fff" }}>
+                  {result.integrationMode === "MASTER_CATALOG" ? "Chế độ: Có Master Catalog"
+                    : result.integrationMode === "BIPARTITE_MATCHING" ? "Cơ chế: Ghép cặp tối ưu (Bipartite + Crosswalk)"
+                    : "Cơ chế: Nguồn chuẩn chỉ định"}
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
