@@ -230,6 +230,7 @@ export function normalizeBrand(value) {
   
   const matchStr = removeDiacritics(normValue).toLowerCase().replace(/\s+/g, " ").trim();
   
+  // 1. Sách & NXB
   if (matchStr.includes("kim dong")) return "NXB Kim Đồng";
   if (matchStr.includes("nha xuat ban tre") || matchStr.includes("nxb tre") || matchStr === "tre") return "NXB Trẻ";
   if (matchStr.includes("nha nam")) return "NXB Nhã Nam";
@@ -239,14 +240,30 @@ export function normalizeBrand(value) {
   if (matchStr.includes("giao duc")) return "NXB Giáo Dục";
   if (matchStr.includes("van hoc")) return "NXB Văn Học";
   
-  const map = {
-    'nxb tre': 'NXB Trẻ',
-    'nha xuat ban tre': 'NXB Trẻ',
-    'nxb kim dong': 'NXB Kim Đồng',
-    'nha xuat ban kim dong': 'NXB Kim Đồng',
-    'nxb tong hop': 'NXB Tổng Hợp TP.HCM',
-    'nxb tong hop tphcm': 'NXB Tổng Hợp TP.HCM'
-  };
+  // 2. Thời trang & May mặc
+  if (matchStr.includes("coolmate") || matchStr.includes("cool mate")) return "Coolmate";
+  if (matchStr.includes("canifa")) return "Canifa";
+  if (matchStr.includes("uniqlo")) return "Uniqlo";
+  if (matchStr.includes("zara")) return "Zara";
+  if (matchStr.includes("bitis") || matchStr.includes("biti's")) return "Biti's";
+  if (matchStr.includes("nike")) return "Nike";
+  if (matchStr.includes("adidas")) return "Adidas";
+
+  // 3. Điện máy & Gia dụng
+  if (matchStr.includes("sunhouse")) return "Sunhouse";
+  if (matchStr.includes("philips")) return "Philips";
+  if (matchStr.includes("lock&lock") || matchStr.includes("lock and lock") || matchStr.includes("locknlock")) return "Lock&Lock";
+  if (matchStr.includes("xiaomi")) return "Xiaomi";
+  if (matchStr.includes("panasonic")) return "Panasonic";
+  if (matchStr.includes("samsung")) return "Samsung";
+
+  // 4. Mỹ phẩm & Làm đẹp
+  if (matchStr.includes("cocoon")) return "Cocoon";
+  if (matchStr.includes("la roche") || matchStr.includes("laroche")) return "La Roche-Posay";
+  if (matchStr.includes("cerave")) return "CeraVe";
+  if (matchStr.includes("loreal") || matchStr.includes("l'oreal")) return "L'Oréal";
+  if (matchStr.includes("innisfree")) return "Innisfree";
+  if (matchStr.includes("simple")) return "Simple";
   
-  return map[matchStr] || normValue;
+  return normValue;
 }

@@ -15,7 +15,82 @@ function createWorkbook(rows, sheetName) {
 }
 
 // ============================================================================
-// 1. TỆP FAHASA THỰC TẾ: Báo cáo xuất bán đa chi nhánh (Template chuẩn FAHASA)
+// 1. TỆP DANH MỤC SẢN PHẨM CHUẨN ĐA NGÀNH HÀNG (MASTER CATALOG - 16 Sản phẩm)
+// Bao gồm: Sách, Thời trang, Điện máy & Gia dụng, Mỹ phẩm
+// ============================================================================
+const catalogData = [
+  ["Mã sản phẩm / Barcode", "Tên sản phẩm chuẩn", "Thương hiệu / NCC", "Ngành hàng", "Giá niêm yết"],
+  // --- Sách & Văn hóa phẩm ---
+  ["9786042392440", "Mãi mãi tuổi hai mươi (Độc quyền - Bìa cứng)", "NXB Kim Đồng", "Sách & Văn hóa phẩm", "135.000"],
+  ["9786045678901", "Đắc Nhân Tâm (Tái bản 2025)", "NXB Trẻ", "Sách & Văn hóa phẩm", "86.000"],
+  ["9786045678902", "Nhà Giả Kim", "NXB Nhã Nam", "Sách & Văn hóa phẩm", "79.000"],
+  ["9786045678903", "Tuổi Trẻ Đáng Giá Bao Nhiêu", "NXB Hội Nhà Văn", "Sách & Văn hóa phẩm", "90.000"],
+  // --- Thời trang & May mặc ---
+  ["8935001234567", "Áo Thun Nam Cotton Compact Cổ Tròn", "Coolmate", "Thời trang & May mặc", "199.000"],
+  ["8935001234568", "Quần Jean Nam Slimfit Co Giãn", "Canifa", "Thời trang & May mặc", "449.000"],
+  ["8935001234569", "Giày Thể Thao Biti's Hunter Street", "Biti's", "Thời trang & May mặc", "899.000"],
+  ["8935001234571", "Áo Khoác Gió Nam Chống Thấm Nước", "Uniqlo", "Thời trang & May mặc", "699.000"],
+  // --- Điện máy & Thiết bị gia dụng ---
+  ["8710103856789", "Nồi Chiên Không Dầu Philips 4.5L HD9200", "Philips", "Điện tử & Gia dụng", "1.490.000"],
+  ["8935001234570", "Ấm Siêu Tốc Inox Sunhouse 1.8L SHD1351", "Sunhouse", "Điện tử & Gia dụng", "185.000"],
+  ["6934177785678", "Tai Nghe Bluetooth Xiaomi Redmi Buds 4", "Xiaomi", "Điện tử & Gia dụng", "490.000"],
+  ["8935001234572", "Máy Xay Sinh Tố Cầm Tay Lock&Lock", "Lock&Lock", "Điện tử & Gia dụng", "550.000"],
+  // --- Mỹ phẩm & Chăm sóc cá nhân ---
+  ["3337875591079", "Kem Chống Nắng La Roche-Posay Anthelios 50ml", "La Roche-Posay", "Mỹ phẩm & Làm đẹp", "395.000"],
+  ["8936173200123", "Nước Tẩy Trang Bí Đao Cocoon 500ml", "Cocoon", "Mỹ phẩm & Làm đẹp", "245.000"],
+  ["3337875597354", "Sữa Rửa Mặt Tạo Bọt CeraVe Foaming Cleanser 236ml", "CeraVe", "Mỹ phẩm & Làm đẹp", "320.000"],
+  ["8936173200124", "Dầu Gội Bưởi Phục Hồi Tóc Cocoon 310ml", "Cocoon", "Mỹ phẩm & Làm đẹp", "165.000"],
+];
+
+// ============================================================================
+// 2. TỆP ĐƠN HÀNG TRỰC TUYẾN SHOPEE (Đa ngành hàng, chứa các biến thể & lỗi thực tế)
+// ============================================================================
+const shopeeData = [
+  ["Ma don", "Ngay gio", "San pham", "Ma vach", "SL", "Gia ban", "Kenh", "Trang thai"],
+  // Sách
+  ["SP-20250701-01", "2025-07-01 10:15:00", "Mãi mãi tuổi hai mươi", "9786042392440", "2", "135000", "shopee vn", "giao thanh cong"],
+  ["SP-20250701-02", "2025-07-01 11:30:00", "Đắc Nhân Tâm", "9786045678901", "1", "86000", "shopee", "completed"],
+  ["SP-20250702-01", "2025-07-02 09:20:00", "Nha Gia Kim (Bản tiếng Việt)", "9786045678902", "1", "79000", "Shopee", "Hoàn thành"],
+  // Thời trang
+  ["SP-20250702-02", "2025-07-02 14:45:00", "Áo Thun Nam Cotton Coolmate (Trắng - Size L)", "8935001234567", "2", "199000", "Shopee", "Hoàn thành"],
+  ["SP-20250703-01", "2025-07-03 16:10:00", "Quần Jean Nam Slimfit Canifa (Xanh Đậm - 31)", "8935001234568", "1", "449000", "Shopee", "Hoàn thành"],
+  ["SP-20250703-02", "2025-07-03 18:00:00", "Giày Biti's Hunter Street - Đen 42", "", "hai", "899000", "Shopee", "Hoàn thành"], // Missing Barcode + Malformed Qty
+  // Gia dụng
+  ["SP-20250704-01", "2025-07-04 09:15:00", "Nồi Chiên Không Dầu Philips 4.5L", "8710103856789", "1", "1490000", "Shopee", "Hoàn thành"],
+  ["SP-20250704-02", "2025-07-04 14:30:00", "Ấm Siêu Tốc Inox Sunhouse 1.8L", "8935001234570", "2", "125000", "Shopee", "Hoàn thành"], // Price anomaly (125k vs 185k)
+  ["SP-20250705-01", "2025-07-05 11:00:00", "Tai Nghe Bluetooth Xiaomi Redmi Buds 4", "6934177785678", "1", "490000", "Shopee", "Hoàn thành"],
+  // Mỹ phẩm
+  ["SP-20250705-02", "2025-07-05 16:45:00", "Kem Chống Nắng La Roche-Posay Anthelios", "3337875591079", "1", "395000", "Shopee", "Hoàn thành"],
+  ["SP-20250706-01", "2025-07-06 10:20:00", "Nước Tẩy Trang Bí Đao Cocoon", "8936173200123", "1", "245000", "Shopee", "Hoàn thành"],
+  ["SP-20250706-02", "2025-07-06 15:10:00", "Sữa Rửa Mặt CeraVe Foaming Cleanser 236ml", "3337875597354", "1", "320000", "Shopee", "Hoàn thành"],
+];
+
+// ============================================================================
+// 3. TỆP ĐƠN HÀNG TẠI QUẦY POS / CỬA HÀNG ĐA NGÀNH HÀNG
+// ============================================================================
+const posData = [
+  ["Mã đơn hàng", "Ngày bán", "Tên sản phẩm", "Mã vạch / SKU", "Số lượng", "Đơn giá", "Thương hiệu", "Trạng thái", "Kênh"],
+  // Sách
+  ["POS-2025-001", "2025-07-01 10:15:00", "Mãi mãi tuổi hai mươi (Độc quyền - Bìa cứng)", "9786042392440", "1", "135000", "NXB Kim Đồng", "Hoàn thành", "POS"],
+  ["POS-2025-002", "2025-07-01 11:30:00", "Đắc Nhân Tâm", "9786045678901", "2", "86000", "NXB Trẻ", "Hoàn thành", "Tai quay"],
+  ["POS-2025-003", "2025-07-02 09:20:00", "Nhà Giả Kim", "9786045678902", "1", "79000", "NXB Nhã Nam", "Hoàn thành", "POS"],
+  // Thời trang
+  ["POS-2025-004", "2025-07-02 14:45:00", "Áo Thun Nam Cotton Compact", "8935001234567", "3", "199000", "Coolmate", "Hoàn thành", "POS"],
+  ["POS-2025-005", "2025-07-03 16:10:00", "Quần Jean Nam Slimfit", "8935001234568", "1", "449000", "Canifa", "Hoàn thành", "POS"],
+  ["POS-2025-005", "2025-07-03 16:15:00", "Quần Jean Nam Slimfit", "8935001234568", "1", "449000", "Canifa", "Hoàn thành", "POS"], // Duplicate Order ID
+  ["POS-2025-006", "15-07-2025 08:30:00", "Giày Thể Thao Biti's Hunter Street", "8935001234569", "1", "899000", "Biti's", "Hoàn thành", "POS"], // Date format
+  // Gia dụng
+  ["POS-2025-007", "2025-07-04 10:00:00", "Nồi Chiên Không Dầu Philips 4.5L", "8710103856789", "1", "1490000", "Philips", "Hoàn thành", "POS"],
+  ["POS-2025-008", "2025-07-04 11:20:00", "Ấm Siêu Tốc Inox Sunhouse 1.8L", "8935001234570", "1", "0", "Sunhouse", "Hoàn thành", "POS"], // Price = 0 (Null vs Zero)
+  ["POS-2025-009", "2025-07-05 13:15:00", "Tai Nghe Bluetooth Xiaomi Redmi Buds 4", "6934177785678", "2", "490000", "Xiaomi", "Hoàn thành", "POS"],
+  // Mỹ phẩm
+  ["POS-2025-010", "2025-07-05 15:40:00", "Kem Chống Nắng La Roche-Posay Anthelios", "3337875591079", "2", "395000", "La Roche-Posay", "Hoàn thành", "POS"],
+  ["POS-2025-011", "2025-07-06 09:10:00", "Nước Tẩy Trang Bí Đao Cocoon 500ml", "8936173200123", "1", "245000", "Cocoon", "Hoàn thành", "POS"],
+  ["POS-2025-012", "2025-07-06 14:25:00", "Sữa Rửa Mặt CeraVe Foaming Cleanser 236ml", "3337875597354", "1", "320000", "CeraVe", "Đã hủy", "POS"], // Stale data
+];
+
+// ============================================================================
+// 4. TỆP FAHASA THỰC TẾ: Báo cáo xuất bán đa chi nhánh
 // ============================================================================
 const fahasaData = [
   ["STT", "Barcode", "Tên sản phẩm", "Mã NCC", "Tên NCC", "Giá bìa", "GDNSBT - NS FAHASA Long Bình Tân", "GDNSQN - NS FAHASA Quảng Nam", "GDNSST - NS FAHASA Sông Trà", "GDNSTD - NS Thủ Đức"],
@@ -23,76 +98,20 @@ const fahasaData = [
   ["2", "9786045678901", "Đắc Nhân Tâm (Tái bản 2025)", "CN00018", "Chi nhánh Công ty TNHH Văn Hóa Sáng Tạo Trí Việt", "86,000", "3", "2", "1", "4"],
   ["3", "9786045678902", "Nhà Giả Kim", "CN00022", "Công ty Cổ phần Văn hóa & Truyền thông Nhã Nam", "79,000", "2", "0", "3", "5"],
   ["4", "9786045678903", "Tuổi Trẻ Đáng Giá Bao Nhiêu", "CN00030", "Nhà xuất bản Hội Nhà Văn", "90,000", "1", "2", "0", "3"],
-  ["5", "9786045678904", "Cà Phê Cùng Tony", "CN00018", "Nhà xuất bản Trẻ", "95,000", "2", "1", "1", "1"],
-  ["6", "9786045678905", "Tôi Thấy Hoa Vàng Trên Cỏ Xanh", "CN00018", "Nhà xuất bản Trẻ", "125,000", "0", "1", "2", "2"],
-  ["7", "9786045678913", "Dế Mèn Phiêu Lưu Ký (Ấn bản kỷ niệm)", "CN00015", "Chi nhánh Nhà xuất bản Kim Đồng tại Thành phố Hồ Chí Minh", "55,000", "5", "3", "4", "6"],
-  ["8", "9786045678910", "Số Đỏ", "CN00045", "Nhà xuất bản Văn Học", "65,000", "1", "0", "1", "2"],
-  ["9", "9786045678911", "Tư Duy Nhanh Và Chậm", "CN00088", "Nhà xuất bản Thế Giới", "210,000", "1", "1", "0", "2"],
-  ["10", "9786045678918", "Hạt Giống Tâm Hồn", "CN00099", "Nhà xuất bản Tổng Hợp TP.HCM", "75,000", "2", "2", "1", "3"],
 ];
 
-// ============================================================================
-// 2. TỆP ĐƠN HÀNG ONLINE SHOPEE / TMĐT (Đa dạng 6 nhóm lỗi để test)
-// ============================================================================
-const shopeeData = [
-  ["Ma don", "Ngay gio", "San pham", "Ma vach", "SL", "Gia ban", "Kenh", "Trang thai"],
-  ["SP-20250701-01", "2025-07-01 10:15:00", "Mãi mãi tuổi hai mươi", "9786042392440", "2", "135000", "shopee vn", "giao thanh cong"],
-  ["SP-20250701-02", "2025-07-01 11:30:00", "Đắc Nhân Tâm", "9786045678901", "1", "86000", "shopee", "completed"],
-  ["SP-20250702-01", "2025-07-02 09:20:00", "Nha Gia Kim", "9786045678902", "2", "79000", "Shopee", "Hoàn thành"],
-  ["SP-20250702-02", "2025-07-02 14:45:00", "Tuổi Trẻ Đáng Giá Bao Nhiêu", "9786045678903", "1", "90000", "Shopee", "Hoàn thành"],
-  ["SP-20250703-01", "2025-07-03 16:10:00", "Cà Phê Cùng Tony - Bản Đẹp", "", "1", "95000", "Shopee", "Hoàn thành"], // Missing ISBN
-  ["SP-20250703-02", "2025-07-03 18:00:00", "Dế Mèn Phiêu Lưu Ký", "9786045678913", "hai", "55000", "Shopee", "Hoàn thành"], // Malformed quantity
-  ["SP-20250704-01", "2025-07-04 09:15:00", "Số Đỏ", "9786045678910", "1", "35000", "Shopee", "Hoàn thành"], // Cross-channel price anomaly (35k vs 65k)
-  ["SP-20250704-02", "2025-07-04 14:30:00", "Tôi Thấy Hoa Vàng Trên Cỏ Xanh", "9786045678905", "1", "125000", "Shopee", "Hoàn thành"],
-  ["SP-20250705-01", "2025-07-05 11:00:00", "Sách Lập Trình React 19 Mới Nhất", "9789999999999", "1", "180000", "Shopee", "Hoàn thành"], // Unresolved exclusive
-  ["SP-20250705-02", "2025-07-05 16:45:00", "Hạt Giống Tâm Hồn (Tập 1)", "9786045678918", "2", "75000", "Shopee", "Hoàn thành"],
-];
-
-// ============================================================================
-// 3. TỆP ĐƠN HÀNG POS TẠI CỬA HÀNG
-// ============================================================================
-const posData = [
-  ["Mã đơn hàng", "Ngày bán", "Tên sản phẩm", "ISBN", "Số lượng", "Đơn giá", "Thương hiệu", "Trạng thái", "Kênh"],
-  ["POS-2025-001", "2025-07-01 10:15:00", "Mãi mãi tuổi hai mươi (Độc quyền - Bìa cứng)", "9786042392440", "1", "135000", "NXB Kim Đồng", "Hoàn thành", "POS"],
-  ["POS-2025-002", "2025-07-01 11:30:00", "Đắc Nhân Tâm", "9786045678901", "2", "86000", "NXB Trẻ", "Hoàn thành", "Tai quay"],
-  ["POS-2025-003", "2025-07-02 09:20:00", "Nhà Giả Kim", "9786045678902", "1", "79000", "NXB Nhã Nam", "Hoàn thành", "POS"],
-  ["POS-2025-004", "2025-07-02 14:45:00", "Tuổi Trẻ Đáng Giá Bao Nhiêu", "9786045678903", "1", "0", "NXB Hội Nhà Văn", "Hoàn thành", "POS"], // Null vs Zero
-  ["POS-2025-005", "2025-07-03 16:10:00", "Cà Phê Cùng Tony", "9786045678904", "2", "95000", "NXB Trẻ", "Hoàn thành", "POS"],
-  ["POS-2025-005", "2025-07-03 16:15:00", "Cà Phê Cùng Tony", "9786045678904", "2", "95000", "NXB Trẻ", "Hoàn thành", "POS"], // Duplicate ID
-  ["POS-2025-006", "15-07-2025 08:30:00", "Tôi Thấy Hoa Vàng Trên Cỏ Xanh", "9786045678905", "1", "125000", "NXB Trẻ", "Hoàn thành", "POS"], // Date format
-  ["POS-2025-007", "2025-07-04 10:00:00", "Dế Mèn Phiêu Lưu Ký", "9786045678913", "3", "55000", "NXB Kim Đồng", "Hoàn thành", "POS"],
-  ["POS-2025-008", "2025-07-04 11:20:00", "Sách Giáo Khoa Toán 12", "9789999999999", "1", "35000", "NXB Giáo Dục", "Đã hủy", "POS"], // Stale data
-];
-
-// ============================================================================
-// 4. DANH MỤC SẢN PHẨM CHUẨN (MASTER CATALOG)
-// ============================================================================
-const catalogData = [
-  ["Tên sản phẩm", "ISBN", "Nhà xuất bản", "Thể loại", "Giá bìa"],
-  ["Mãi mãi tuổi hai mươi (Độc quyền - Bìa cứng)", "9786042392440", "NXB Kim Đồng", "Văn học", "135.000"],
-  ["Đắc Nhân Tâm", "9786045678901", "NXB Trẻ", "Kỹ năng sống", "86.000"],
-  ["Nhà Giả Kim", "9786045678902", "NXB Nhã Nam", "Văn học", "79.000"],
-  ["Tuổi Trẻ Đáng Giá Bao Nhiêu", "9786045678903", "NXB Hội Nhà Văn", "Kỹ năng sống", "90.000"],
-  ["Cà Phê Cùng Tony", "9786045678904", "NXB Trẻ", "Kỹ năng sống", "95.000"],
-  ["Tôi Thấy Hoa Vàng Trên Cỏ Xanh", "9786045678905", "NXB Trẻ", "Văn học", "125.000"],
-  ["Dế Mèn Phiêu Lưu Ký", "9786045678913", "NXB Kim Đồng", "Thiếu nhi", "55.000"],
-  ["Số Đỏ", "9786045678910", "NXB Văn Học", "Văn học", "65.000"],
-  ["Tư Duy Nhanh Và Chậm", "9786045678911", "NXB Thế Giới", "Tâm lý học", "210.000"],
-  ["Hạt Giống Tâm Hồn", "9786045678918", "NXB Tổng Hợp TP.HCM", "Tâm lý học", "75.000"],
-];
-
-const file1 = path.join(outDir, "bao-cao-phan-phoi-fahasa.xlsx");
+const file1 = path.join(outDir, "danh-muc-san-pham-chuan.xlsx");
 const file2 = path.join(outDir, "don-hang-online-shopee.xlsx");
 const file3 = path.join(outDir, "don-hang-pos-cua-hang.xlsx");
-const file4 = path.join(outDir, "danh-muc-san-pham-chuan.xlsx");
+const file4 = path.join(outDir, "bao-cao-phan-phoi-fahasa.xlsx");
 
-XLSX.writeFile(createWorkbook(fahasaData, "FAHASA Xuất Bán"), file1);
-XLSX.writeFile(createWorkbook(shopeeData, "Đơn Shopee"), file2);
-XLSX.writeFile(createWorkbook(posData, "Đơn POS"), file3);
-XLSX.writeFile(createWorkbook(catalogData, "Danh mục chuẩn"), file4);
+XLSX.writeFile(createWorkbook(catalogData, "Master Catalog Đa Ngành"), file1);
+XLSX.writeFile(createWorkbook(shopeeData, "Đơn Shopee Đa Ngành"), file2);
+XLSX.writeFile(createWorkbook(posData, "Đơn POS Đa Ngành"), file3);
+XLSX.writeFile(createWorkbook(fahasaData, "FAHASA Xuất Bán"), file4);
 
-console.log("✓ Đã sinh thành công các tệp dữ liệu mẫu thực tế:");
-console.log("  -", file1, "(Báo cáo đa chi nhánh chuẩn FAHASA)");
-console.log("  -", file2, "(Đơn hàng trực tuyến Shopee)");
+console.log("✓ Đã sinh thành công 4 tệp dữ liệu mẫu thực tế ĐA NGÀNH HÀNG:");
+console.log("  -", file1, "(Master Catalog chuẩn: Sách, Thời trang, Điện gia dụng, Mỹ phẩm)");
+console.log("  -", file2, "(Đơn hàng online Shopee)");
 console.log("  -", file3, "(Đơn hàng tại quầy POS)");
-console.log("  -", file4, "(Danh mục sản phẩm chuẩn Master Catalog)");
+console.log("  -", file4, "(Báo cáo xuất bán đa chi nhánh FAHASA)");

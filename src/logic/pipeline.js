@@ -2,14 +2,14 @@
  * Pipeline chính: gộp dữ liệu từ nhiều file đơn hàng + đối chiếu danh mục chuẩn
  * + kiểm soát chất lượng dữ liệu -> dataset tích hợp + báo cáo lỗi (có phân mức).
  *
- * Hỗ trợ 2 chế độ:
- *   - Chế độ 1: Có file Danh mục sản phẩm chuẩn (Master Catalog)
- *   - Chế độ 2 (Mới): KHÔNG có file chuẩn -> Tự động Ghép cặp tối ưu toàn cục (Bipartite Matching)
- *     kết hợp Danh mục tích lũy dần (Progressive Crosswalk) theo Cơ chế 3 & 4.
+ * Áp dụng Kiến trúc Strategy Pattern:
+ *   - Chiến lược 0: CATALOG (Có Master Catalog)
+ *   - Chiến lược 1: MASTER_SOURCE (Cơ chế 1: Chọn 1 nguồn làm chuẩn)
+ *   - Chiến lược 2: CLUSTERING (Cơ chế 2: Tự động gom cụm)
+ *   - Chiến lược 3: BIPARTITE (Cơ chế 3: Ghép cặp tối ưu toàn cục)
  */
 
-import { buildRows, buildCatalog } from "./fieldMapping";
-import { resolveEntities } from "./entityResolution";
+import { buildRows } from "./fieldMapping";
 import { runAllChecks, summarizeIssues } from "./qualityRules";
 import {
   normalizeNumber,
@@ -20,22 +20,22 @@ import {
   normalizeBrand,
   normalizeIdCode,
   validateISBN13,
-  normalizeTextForMatching,
 } from "./normalize";
-import {
-  extractUniqueEntitiesFromRows,
-  matchBipartiteEntities,
-  synthesizeCanonicalCatalog,
-  getProgressiveCrosswalk,
-} from "./bipartiteMatching";
+import { runResolutionStrategy } from "./strategies";
 
 /**
  * orderFiles: mảng { fileName, dataRows, mapping }
- * catalogFile: { dataRows, mapping } (Tùy chọn - có thể null)
- * options: { crosswalk, fuzzyHighThreshold, fuzzyConfirmThreshold, masterSourceIndex }
+ * catalogFile: { dataRows, mapping } (Tùy chọn)
+ * options: { resolutionStrategy, masterSourceIndex, fuzzyHighThreshold, fuzzyConfirmThreshold, crosswalk }
  */
 export function runPipeline(orderFiles, catalogFile = null, options = {}) {
-  const { crosswalk = [], fuzzyHighThreshold = 90, fuzzyConfirmThreshold = 70, masterSourceIndex = null } = options;
+  const {
+    resolutionStrategy = "BIPARTITE",
+    fuzzyHighThreshold = 90,
+    fuzzyConfirmThreshold = 70,
+    masterSourceIndex = 0,
+    crosswalk = [],
+  } = options;
 
   // 1. Gộp toàn bộ dòng từ các file đơn hàng, gắn nhãn nguồn
   let allRows = [];
@@ -66,103 +66,24 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     };
   });
 
-  let resolved = [];
-  let catalog = [];
-  let integrationMode = "MASTER_CATALOG"; // 'MASTER_CATALOG' | 'BIPARTITE_MATCHING' | 'MASTER_SOURCE'
-  let bipartiteStats = null;
+  // 3. Thực thi Chiến Lược Đối Chiếu Thực Thể (Strategy Pattern Dispatcher)
+  const targetStrategyKey = (catalogFile && catalogFile.dataRows && catalogFile.dataRows.length > 0)
+    ? "CATALOG"
+    : resolutionStrategy;
 
-  // -------------------------------------------------------------
-  // CHẾ ĐỘ 1: Có File Danh Mục Chuẩn
-  // -------------------------------------------------------------
-  if (catalogFile && catalogFile.dataRows && catalogFile.dataRows.length > 0) {
-    catalog = buildCatalog(catalogFile.dataRows, catalogFile.mapping);
-    resolved = resolveEntities(allRows, catalog, { crosswalk, idField: "ma_dinh_danh", titleField: "ten_sp" });
-    integrationMode = "MASTER_CATALOG";
-  }
-  // -------------------------------------------------------------
-  // CHẾ ĐỘ 2: KHÔNG Có File Chuẩn -> Ghép cặp tối ưu & Tích lũy (Bipartite + Progressive Crosswalk)
-  // -------------------------------------------------------------
-  else {
-    const sourceLabels = Array.from(sourceRowsMap.keys());
-    
-    // Nếu có chọn 1 nguồn làm chuẩn (Cơ chế 1)
-    if (masterSourceIndex !== null && masterSourceIndex >= 0 && masterSourceIndex < orderFiles.length) {
-      integrationMode = "MASTER_SOURCE";
-      const masterLabel = sourceLabels[masterSourceIndex];
-      const masterRows = allRows.filter((r) => r.__source === masterLabel);
-      const masterEntities = extractUniqueEntitiesFromRows(masterRows, masterLabel);
-      
-      // Tạo catalog từ master source
-      catalog = masterEntities.map((e) => ({
-        ma_dinh_danh: e.ma_dinh_danh,
-        ten_sp: e.ten_sp,
-        thuong_hieu: e.thuong_hieu,
-        danh_muc: `Chuẩn từ ${masterLabel}`,
-        gia_chuan: e.gia_chuan,
-        isMasterSource: true,
-      }));
+  const resolutionResult = runResolutionStrategy(targetStrategyKey, {
+    allRows,
+    catalogFile,
+    orderFiles,
+    sourceRowsMap,
+    masterSourceIndex,
+    fuzzyHighThreshold,
+    fuzzyConfirmThreshold,
+    crosswalk,
+  });
 
-      resolved = resolveEntities(allRows, catalog, { crosswalk, idField: "ma_dinh_danh", titleField: "ten_sp" });
-    }
-    // Ghép cặp tối ưu toàn cục Bipartite Matching (Cơ chế 3 + 4 - Mặc định khi không có file chuẩn)
-    else {
-      integrationMode = "BIPARTITE_MATCHING";
-      
-      // Trích xuất unique entities cho từng nguồn
-      const source1Label = sourceLabels[0] || "Nguồn 1";
-      const source2Label = sourceLabels[1] || "Nguồn 2";
-      
-      const rows1 = allRows.filter((r) => r.__source === source1Label);
-      const rows2 = allRows.filter((r) => r.__source === source2Label);
-
-      const entities1 = extractUniqueEntitiesFromRows(rows1, source1Label);
-      const entities2 = extractUniqueEntitiesFromRows(rows2, source2Label);
-
-      const crosswalkMemory = getProgressiveCrosswalk();
-      const bipartiteResult = matchBipartiteEntities(entities1, entities2, {
-        crosswalkMemory,
-        fuzzyHighThreshold,
-        fuzzyConfirmThreshold,
-      });
-
-      const synthesized = synthesizeCanonicalCatalog(bipartiteResult);
-      catalog = synthesized.catalog;
-      bipartiteStats = {
-        totalUniqueSource1: entities1.length,
-        totalUniqueSource2: entities2.length,
-        matchedPairsCount: bipartiteResult.matchedPairs.length,
-        unmatchedSource1Count: bipartiteResult.unmatchedA.length,
-        unmatchedSource2Count: bipartiteResult.unmatchedB.length,
-      };
-
-      // Ánh xạ từng dòng đơn hàng vào canonical product đã tổng hợp
-      resolved = allRows.map((row) => {
-        const rawId = (row.ma_dinh_danh || "").replace(/[\s-]/g, "").toUpperCase();
-        const normTitle = normalizeTextForMatching(row.ten_sp);
-        const entityKey = rawId ? `ID:${rawId}` : `TITLE:${normTitle}`;
-        const mappingKey = `${row.__source}|${entityKey}`;
-
-        const mapping = synthesized.entityToCanonicalMap.get(mappingKey);
-        if (mapping) {
-          return {
-            ...row,
-            matched: mapping.canonical,
-            matchStatus: mapping.matchStatus,
-            matchScore: mapping.matchScore,
-            matchTier: mapping.canonical.matchTier || "tier_bipartite",
-          };
-        }
-
-        return {
-          ...row,
-          matched: null,
-          matchStatus: "UNRESOLVED",
-          matchScore: 0,
-          matchTier: null,
-        };
-      });
-    }
-  }
+  const resolved = resolutionResult.resolved;
+  const catalog = resolutionResult.catalog;
 
   // 4. Kiểm soát chất lượng dữ liệu (đầy đủ 6 nhóm)
   const issues = runAllChecks(resolved);
@@ -216,8 +137,10 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     integrated,
     issues,
     issuesSummary: summarizeIssues(issues),
-    integrationMode,
-    bipartiteStats,
+    integrationMode: resolutionResult.strategyKey,
+    strategyLabel: resolutionResult.strategyLabel,
+    bipartiteStats: resolutionResult.bipartiteStats || null,
+    clustersStats: resolutionResult.clustersStats || null,
     synthesizedCatalog: catalog,
     stats: {
       totalRows: integrated.length,

@@ -7,11 +7,12 @@ import {
   UploadCloud, Layers, Package, CheckCircle2, AlertTriangle,
   RotateCcw, Download, BarChart3, Table2, ListChecks, Loader2, ArrowRight, Trash2,
   Settings, ShieldCheck, Check, X, Sliders, FileText, Sparkles, Database, BookmarkCheck,
-  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle
+  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle, Store
 } from "lucide-react";
 import { detectFields, FIELD_LABELS } from "./logic/fieldMapping";
 import { runPipeline } from "./logic/pipeline";
 import { SEVERITY_LABELS, GROUP_LABELS } from "./logic/qualityRules";
+import { DOMAINS } from "./logic/domainConfig";
 import {
   saveProgressiveCrosswalkPair,
   getProgressiveCrosswalk,
@@ -89,8 +90,8 @@ function formatVND(n) { return isNaN(n) ? "—" : Math.round(n).toLocaleString("
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const PROCESSING_STEPS = [
-  "Đang đọc và chuẩn hóa dữ liệu từ các tệp đơn hàng (Mã đơn, Kênh, Trạng thái, Thương hiệu, Ngày)...",
-  "Đang kích hoạt Cơ chế Ghép cặp tối ưu toàn cục (Bipartite Matching) & Đối chiếu Crosswalk...",
+  "Đang đọc và chuẩn hóa dữ liệu từ các tệp đơn hàng đa kênh (Mã đơn, Kênh, Trạng thái, Thương hiệu, Ngày)...",
+  "Đang kích hoạt Cơ Chế 3: Ghép cặp tối ưu toàn cục (Bipartite Optimal Matching)...",
   "Đang kiểm tra chất lượng dữ liệu 6 nhóm lỗi (Schema, Entity, Value, Temporal, Semantic, Technical)...",
   "Đang tổng hợp dữ liệu tích hợp và báo cáo chất lượng quản trị...",
 ];
@@ -213,7 +214,7 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dra
                 ))}
                 {fileState.mapping.branchColumns && fileState.mapping.branchColumns.length > 0 && (
                   <span className="bsi-badge" style={{ background: "var(--brass-soft)", color: "#7A5A15" }}>
-                    ✓ Đa chi nhánh ({fileState.mapping.branchColumns.length} NS)
+                    ✓ Đa chi nhánh ({fileState.mapping.branchColumns.length} điểm bán)
                   </span>
                 )}
               </div>
@@ -330,10 +331,6 @@ export default function DataIntegrationTool() {
   const [parseError, setParseError] = useState("");
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // Cơ chế chọn khi không có file chuẩn: 'bipartite' (Cơ chế 3 & 4 - Mặc định) | 'master_source' (Cơ chế 1)
-  const [noCatalogMode, setNoCatalogMode] = useState("bipartite");
-  const [selectedMasterSourceIdx, setSelectedMasterSourceIdx] = useState(0);
-
   // Progressive Crosswalk & Manual Confirmations
   const [manualConfirmations, setManualConfirmations] = useState(new Map());
   const [crosswalkCount, setCrosswalkCount] = useState(0);
@@ -396,7 +393,6 @@ export default function DataIntegrationTool() {
     setManualConfirmations(new Map());
   };
 
-  // Sẵn sàng xử lý nếu có ít nhất 1 file đơn hàng
   const readyToProcess = orderFiles.length > 0 && orderFiles.every((f) => f.dataRows.length > 0);
 
   const processAll = async () => {
@@ -405,13 +401,14 @@ export default function DataIntegrationTool() {
     await delay(500); setProcIdx(2);
     await delay(500);
 
+    // Sử dụng Cơ Chế 3 (BIPARTITE) làm chiến lược mặc định khi không có catalog file
     const pipelineOptions = {
+      resolutionStrategy: "BIPARTITE",
       fuzzyHighThreshold: config.fuzzyHighThreshold,
       fuzzyConfirmThreshold: config.fuzzyConfirmThreshold,
-      masterSourceIndex: !catalogFile && noCatalogMode === "master_source" ? selectedMasterSourceIdx : null,
     };
 
-    const { integrated, issues, issuesSummary, stats, integrationMode, bipartiteStats, synthesizedCatalog } = runPipeline(
+    const { integrated, issues, issuesSummary, stats, integrationMode, strategyLabel, bipartiteStats, synthesizedCatalog } = runPipeline(
       orderFiles,
       catalogFile,
       pipelineOptions
@@ -434,6 +431,7 @@ export default function DataIntegrationTool() {
       revenueTotal, revenueByChannel, topProducts,
       pendingConfirmations,
       integrationMode,
+      strategyLabel,
       bipartiteStats,
       synthesizedCatalog,
       activePreset: activePresetId !== "custom" ? PRESETS[activePresetId].name : "Tùy chỉnh riêng",
@@ -442,7 +440,6 @@ export default function DataIntegrationTool() {
     setStep("results");
   };
 
-  // Mở rộng 1 + Cơ chế 4: Xác nhận thủ công & Lưu vào Progressive Crosswalk
   const handleManualDecision = (rowIndex, decision, item) => {
     setManualConfirmations((prev) => {
       const next = new Map(prev);
@@ -497,23 +494,22 @@ export default function DataIntegrationTool() {
   };
 
   const CHART_COLORS = ["#A97B25", "#4C7458", "#9C4A3B", "#2C3E4A", "#7A8B76", "#C9A45C"];
-
   const currentPreviewPreset = hoveredPresetId ? PRESETS[hoveredPresetId] : activePresetId !== "custom" ? PRESETS[activePresetId] : null;
 
   return (
     <div className="bsi-root w-full">
       <Tokens />
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-7 flex-wrap gap-3">
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--brass)" }}>
-              Hệ thống nội bộ · Quản trị dữ liệu bán hàng đa ngành hàng
+              Hệ thống nội bộ · Quản trị & Tích hợp dữ liệu bán hàng đa ngành hàng
             </p>
             <h1 className="bsi-serif text-[26px] font-semibold leading-tight">Sổ Tích Hợp Dữ Liệu Bán Hàng</h1>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowConfigModal(true)} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-3.5 py-2">
-              <Sliders size={14} /> Cấu hình xử lý: <span className="font-bold text-amber-900">{activePresetId !== "custom" ? PRESETS[activePresetId].name.split("(")[0].trim() : "Tùy chỉnh"}</span>
+              <Sliders size={14} /> Gói cấu hình: <span className="font-bold text-amber-900">{activePresetId !== "custom" ? PRESETS[activePresetId].name.split("(")[0].trim() : "Tùy chỉnh"}</span>
             </button>
             {step === "results" && (
               <>
@@ -528,7 +524,7 @@ export default function DataIntegrationTool() {
           </div>
         </div>
 
-        {/* Modal Cấu hình xử lý thông minh theo 3 Gói Nghiệp Vụ (Mở rộng 3) */}
+        {/* Modal Cấu hình xử lý thông minh theo 3 Gói Nghiệp Vụ */}
         {showConfigModal && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
             <div className="bsi-card max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto" style={{ background: "var(--paper-card)" }}>
@@ -695,57 +691,48 @@ export default function DataIntegrationTool() {
         {step === "upload" && (
           <>
             <p className="text-[13.5px] mb-5 max-w-2xl" style={{ color: "var(--ink-soft)" }}>
-              Hỗ trợ tích hợp đa nguồn: Có sẵn file danh mục chuẩn <strong>HOẶC</strong> tự động đối chiếu chéo giữa các kênh với <strong>Ghép cặp tối ưu toàn cục (Bipartite Matching)</strong>.
+              Hệ thống tích hợp dữ liệu bán hàng đa kênh & đa ngành hàng. Có sẵn file danh mục chuẩn <strong>HOẶC</strong> tự động đối chiếu chéo giữa các nguồn với <strong>Ghép cặp tối ưu toàn cục (Bipartite Matching)</strong>.
             </p>
+
             {parseError && (
               <div className="bsi-card p-3 mb-4 flex items-center gap-2" style={{ borderColor: "var(--brick)", background: "var(--brick-soft)" }}>
                 <AlertTriangle size={15} style={{ color: "var(--brick)" }} />
                 <span className="text-[12.5px]" style={{ color: "var(--brick)" }}>{parseError}</span>
               </div>
             )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
               <OrdersDropzone files={orderFiles} onAddFile={addOrderFile} onRemoveFile={removeOrderFile}
                 maxFiles={MAX_ORDER_FILES} dragKey="orders" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
-              <UploadCard tag="Ô 2 (Tùy chọn)" icon={Package} title="Danh mục sản phẩm chuẩn"
-                hint="Nếu có file Master Catalog, hệ thống sẽ đối chiếu theo file này. Nếu không có, hệ thống tự động ghép cặp tối ưu giữa các tệp đơn hàng."
+              <UploadCard tag="Ô 2 (Tùy chọn)" icon={Package} title="Danh mục sản phẩm chuẩn (Master Catalog)"
+                hint="Nếu có file Master Catalog, hệ thống sẽ đối chiếu theo danh mục này. Nếu để trống, hệ thống tự động chạy Cơ Chế 3 (Ghép cặp tối ưu toàn cục giữa các file đơn hàng)."
                 fileState={catalogFile} onFile={setCatalog} onRemove={() => setCatalogFile(null)}
                 dragKey="catalog" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
             </div>
 
-            {/* Lựa chọn cơ chế khi không có File Danh mục chuẩn */}
+            {/* Thông báo chế độ đối chiếu khi không có File Chuẩn */}
             {!catalogFile && orderFiles.length >= 2 && (
-              <div className="bsi-card p-4 mb-6 border" style={{ borderColor: "var(--brass)", background: "var(--paper-card)" }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles size={16} style={{ color: "var(--brass)" }} />
-                  <h4 className="bsi-serif text-[14px] font-semibold">Phương thức đối chiếu khi không có File Chuẩn</h4>
+              <div className="bsi-card p-3.5 mb-6 border flex items-center justify-between flex-wrap gap-3" style={{ borderColor: "var(--brass)", background: "var(--paper-card)" }}>
+                <div className="flex items-center gap-2.5">
+                  <Sparkles size={18} style={{ color: "var(--brass)", flexShrink: 0 }} />
+                  <div>
+                    <h4 className="font-semibold text-[13px] text-amber-900">
+                      Tự động kích hoạt Cơ Chế 3: Ghép cặp tối ưu toàn cục (Bipartite Optimal Matching)
+                    </h4>
+                    <p className="text-[11.5px] text-gray-600 mt-0.5">
+                      Tự động giải bài toán ghép 1-1 tối ưu giữa các kênh, loại trừ 100% tranh chấp khớp và tổng hợp danh mục đại diện.
+                    </p>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12.5px] mt-2">
-                  <label className={`p-3 rounded border cursor-pointer transition flex items-start gap-2.5 ${noCatalogMode === "bipartite" ? "border-amber-700 bg-amber-50/50" : "border-gray-200"}`}>
-                    <input type="radio" name="noCatMode" checked={noCatalogMode === "bipartite"} onChange={() => setNoCatalogMode("bipartite")} className="mt-0.5" />
-                    <div>
-                      <span className="font-semibold block text-[13px] text-amber-900">🌟 Ghép cặp tối ưu toàn cục (Bipartite Matching)</span>
-                      <span className="text-[11.5px] text-gray-600 block mt-0.5">Khuyên dùng (Cơ chế 3 & 4): Tránh tranh chấp khớp, tự động tổng hợp danh mục và ghi nhớ qua Progressive Crosswalk.</span>
-                    </div>
-                  </label>
-                  <label className={`p-3 rounded border cursor-pointer transition flex items-start gap-2.5 ${noCatalogMode === "master_source" ? "border-amber-700 bg-amber-50/50" : "border-gray-200"}`}>
-                    <input type="radio" name="noCatMode" checked={noCatalogMode === "master_source"} onChange={() => setNoCatalogMode("master_source")} className="mt-0.5" />
-                    <div>
-                      <span className="font-semibold block text-[13px]">📁 Chọn 1 tệp làm nguồn chuẩn (Cơ chế 1)</span>
-                      <select value={selectedMasterSourceIdx} onChange={(e) => setSelectedMasterSourceIdx(Number(e.target.value))}
-                        disabled={noCatalogMode !== "master_source"} className="mt-1 text-[11.5px] p-1 border rounded w-full bg-white">
-                        {orderFiles.map((f, idx) => (
-                          <option key={idx} value={idx}>Chuẩn: {f.fileName}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </label>
-                </div>
+                <span className="bsi-badge self-center" style={{ background: "var(--brass-soft)", color: "#7A5A15" }}>
+                  Cơ chế 3 tự động
+                </span>
               </div>
             )}
 
             <div className="flex items-center justify-end flex-wrap gap-3">
               <button onClick={processAll} disabled={!readyToProcess} className="bsi-btn-primary flex items-center gap-2 text-[14px] px-5 py-2.5">
-                Bắt đầu tích hợp <ArrowRight size={15} />
+                Bắt đầu tích hợp dữ liệu <ArrowRight size={15} />
               </button>
             </div>
           </>
@@ -774,7 +761,7 @@ export default function DataIntegrationTool() {
               <div className="flex items-center gap-3">
                 <span className="bsi-stamp">✓ ĐÃ ĐỐI CHIẾU</span>
                 <span className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
-                  {result.stats.totalRows} giao dịch từ {orderFiles.length} tệp đơn hàng · {result.stats.catalogSize} sản phẩm trong danh mục
+                  {result.stats.totalRows} giao dịch từ {orderFiles.length} tệp · {result.stats.catalogSize} sản phẩm trong danh mục
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -782,9 +769,7 @@ export default function DataIntegrationTool() {
                   Gói: {result.activePreset}
                 </span>
                 <span className="bsi-badge" style={{ background: "var(--navy)", color: "#fff" }}>
-                  {result.integrationMode === "MASTER_CATALOG" ? "Chế độ: Có Master Catalog"
-                    : result.integrationMode === "BIPARTITE_MATCHING" ? "Cơ chế: Ghép cặp tối ưu (Bipartite + Crosswalk)"
-                    : "Cơ chế: Nguồn chuẩn chỉ định"}
+                  {result.strategyLabel}
                 </span>
               </div>
             </div>
@@ -884,7 +869,6 @@ export default function DataIntegrationTool() {
               </div>
             )}
 
-            {/* Mở rộng 1: UI Xác nhận thủ công các trường hợp Entity Resolution không chắc chắn */}
             {activeTab === "manual_confirm" && (
               <div className="bsi-card p-5">
                 <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
@@ -947,19 +931,18 @@ export default function DataIntegrationTool() {
               </div>
             )}
 
-            {/* Mở rộng 2: Báo cáo chất lượng dữ liệu trước và sau xử lý */}
             {activeTab === "quality_report" && (
               <div className="space-y-4">
                 <div className="bsi-card p-5">
-                  <h3 className="bsi-serif text-[15px] font-semibold mb-2">Báo Cáo Chất Lượng Dữ Liệu (Mở Rộng #2)</h3>
+                  <h3 className="bsi-serif text-[15px] font-semibold mb-2">Báo Cáo Chất Lượng Dữ Liệu</h3>
                   <p className="text-[12.5px] mb-4" style={{ color: "var(--ink-soft)" }}>
-                    Thống kê chi tiết chất lượng dữ liệu trước và sau khi đi qua pipeline xử lý & đối chiếu.
+                    Thống kê chi tiết chất lượng dữ liệu theo quy tắc đối chiếu: <strong>{result.strategyLabel}</strong>
                   </p>
                   
                   {result.bipartiteStats && (
                     <div className="mb-5 p-3.5 rounded border" style={{ borderColor: "var(--brass)", background: "var(--paper)" }}>
                       <h4 className="text-[13px] font-semibold mb-2 text-amber-900 flex items-center gap-1.5">
-                        <Sparkles size={15} /> Thống Kê Ghép Cặp Tối Ưu Toàn Cục (Bipartite Matching)
+                        <Sparkles size={15} /> Thống Kê Ghép Cặp Tối Ưu Toàn Cục (Cơ Chế 3 - Bipartite Matching)
                       </h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[12px]">
                         <div>Sản phẩm duy nhất Nguồn 1: <strong>{result.bipartiteStats.totalUniqueSource1}</strong></div>

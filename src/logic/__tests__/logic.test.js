@@ -4,6 +4,9 @@ import { detectFields, buildRows } from "../fieldMapping";
 import { resolveEntities, tokenSortRatio } from "../entityResolution";
 import { runAllChecks, checkDuplicates, checkMissingAttributes, checkCrossChannelPrice, checkNullVsZero, checkCategoricalMismatch, checkEncodingIssues, checkStaleData, checkReferentialIntegrity, GROUP_LABELS } from "../qualityRules";
 import { extractUniqueEntitiesFromRows, matchBipartiteEntities, synthesizeCanonicalCatalog } from "../bipartiteMatching";
+import { executeClusteringStrategy } from "../strategies/clusteringStrategy";
+import { executeMasterSourceStrategy } from "../strategies/masterSourceStrategy";
+import { executeBipartiteStrategy } from "../strategies/bipartiteStrategy";
 import { runPipeline } from "../pipeline";
 
 describe("normalizeNumber", () => {
@@ -96,6 +99,7 @@ describe("normalizeBrand", () => {
   it("normalizes known brand aliases", () => {
     expect(normalizeBrand('NXB Trẻ')).toBe('NXB Trẻ');
     expect(normalizeBrand('nha xuat ban tre')).toBe('NXB Trẻ');
+    expect(normalizeBrand('Chi nhánh Nhà xuất bản Kim Đồng tại Thành phố Hồ Chí Minh')).toBe('NXB Kim Đồng');
   });
   it("keeps unknown brand but normalizes spaces", () => {
     expect(normalizeBrand('  Alpha   Books  ')).toBe('Alpha Books');
@@ -148,57 +152,47 @@ describe("resolveEntities", () => {
   });
 });
 
-describe("Bipartite Matching & Progressive Crosswalk (Mechanisms 3 & 4)", () => {
+describe("Strategy Pattern & Resolution Rules (Cơ chế 1, 2, 3)", () => {
   const source1Rows = [
-    { ten_sp: "Đắc Nhân Tâm", ma_dinh_danh: "9786045678901", gia: "86000", thuong_hieu: "NXB Trẻ" },
-    { ten_sp: "Nhà Giả Kim (bìa mềm)", ma_dinh_danh: "", gia: "79000", thuong_hieu: "NXB Nhã Nam" },
-    { ten_sp: "Sách Riêng POS", ma_dinh_danh: "POS-001", gia: "50000", thuong_hieu: "NXB Văn Học" },
+    { ten_sp: "Đắc Nhân Tâm", ma_dinh_danh: "9786045678901", gia: "86000", thuong_hieu: "NXB Trẻ", __source: "POS" },
+    { ten_sp: "Nhà Giả Kim (bìa mềm)", ma_dinh_danh: "", gia: "79000", thuong_hieu: "NXB Nhã Nam", __source: "POS" },
+    { ten_sp: "Sách Riêng POS", ma_dinh_danh: "POS-001", gia: "50000", thuong_hieu: "NXB Văn Học", __source: "POS" },
   ];
 
   const source2Rows = [
-    { ten_sp: "Dac Nhan Tam", ma_dinh_danh: "9786045678901", gia: "86000", thuong_hieu: "NXB Trẻ" },
-    { ten_sp: "Nhà Giả Kim", ma_dinh_danh: "", gia: "75000", thuong_hieu: "NXB Nhã Nam" },
-    { ten_sp: "Sách Riêng Shopee", ma_dinh_danh: "SP-999", gia: "120000", thuong_hieu: "NXB Trẻ" },
+    { ten_sp: "Dac Nhan Tam", ma_dinh_danh: "9786045678901", gia: "86000", thuong_hieu: "NXB Trẻ", __source: "Shopee" },
+    { ten_sp: "Nhà Giả Kim", ma_dinh_danh: "", gia: "75000", thuong_hieu: "NXB Nhã Nam", __source: "Shopee" },
+    { ten_sp: "Sách Riêng Shopee", ma_dinh_danh: "SP-999", gia: "120000", thuong_hieu: "NXB Trẻ", __source: "Shopee" },
   ];
 
-  it("extracts unique entities correctly from row list", () => {
-    const entities1 = extractUniqueEntitiesFromRows(source1Rows, "POS");
-    expect(entities1.length).toBe(3);
-    expect(entities1.find((e) => e.ma_dinh_danh === "9786045678901")).toBeDefined();
+  const allSampleRows = [...source1Rows, ...source2Rows];
+
+  it("Cơ chế 1: executeMasterSourceStrategy selects master source and resolves other sources", () => {
+    const orderFiles = [{ fileName: "POS" }, { fileName: "Shopee" }];
+    const res = executeMasterSourceStrategy({ allRows: allSampleRows, orderFiles, masterSourceIndex: 0 });
+    expect(res.strategyKey).toBe("MASTER_SOURCE");
+    expect(res.catalog.length).toBe(3);
   });
 
-  it("performs conflict-free bipartite optimal matching", () => {
-    const entities1 = extractUniqueEntitiesFromRows(source1Rows, "POS");
-    const entities2 = extractUniqueEntitiesFromRows(source2Rows, "Shopee");
-
-    const result = matchBipartiteEntities(entities1, entities2);
-    expect(result.matchedPairs.length).toBe(2); // "Đắc Nhân Tâm" (ID exact) and "Nhà Giả Kim" (Fuzzy title)
-    expect(result.unmatchedA.length).toBe(1); // "Sách Riêng POS"
-    expect(result.unmatchedB.length).toBe(1); // "Sách Riêng Shopee"
+  it("Cơ chế 2: executeClusteringStrategy auto-clusters similar entities", () => {
+    const res = executeClusteringStrategy({ allRows: allSampleRows, fuzzyConfirmThreshold: 75 });
+    expect(res.strategyKey).toBe("CLUSTERING");
+    expect(res.clustersStats.totalClusters).toBeGreaterThanOrEqual(4);
+    expect(res.resolved.length).toBe(6);
   });
 
-  it("uses progressive crosswalk memory when available", () => {
-    const entities1 = [{ entityKey: "TITLE:sach a", ten_sp: "Sách A", ten_sp_norm: "sach a", source: "POS", prices: [] }];
-    const entities2 = [{ entityKey: "TITLE:sach b", ten_sp: "Sách B Đặc Biệt", ten_sp_norm: "sach b dac biet", source: "Shopee", prices: [] }];
+  it("Cơ chế 3: executeBipartiteStrategy matches conflict-free between sources", () => {
+    const sourceRowsMap = new Map();
+    sourceRowsMap.set("POS", source1Rows);
+    sourceRowsMap.set("Shopee", source2Rows);
 
-    const memory = [{ normA: "sach a", normB: "sach b dac biet" }];
-    const result = matchBipartiteEntities(entities1, entities2, { crosswalkMemory: memory });
-
-    expect(result.matchedPairs.length).toBe(1);
-    expect(result.matchedPairs[0].method).toBe("PROGRESSIVE_CROSSWALK");
-    expect(result.matchedPairs[0].status).toBe("MATCHED_EXACT");
+    const res = executeBipartiteStrategy({ allRows: allSampleRows, sourceRowsMap });
+    expect(res.strategyKey).toBe("BIPARTITE");
+    expect(res.bipartiteStats.matchedPairsCount).toBe(2);
+    expect(res.catalog.length).toBe(4);
   });
 
-  it("synthesizes canonical master catalog from bipartite pairs and exclusives", () => {
-    const entities1 = extractUniqueEntitiesFromRows(source1Rows, "POS");
-    const entities2 = extractUniqueEntitiesFromRows(source2Rows, "Shopee");
-    const result = matchBipartiteEntities(entities1, entities2);
-
-    const synthesized = synthesizeCanonicalCatalog(result);
-    expect(synthesized.catalog.length).toBe(4); // 2 matched + 1 exclusive POS + 1 exclusive Shopee
-  });
-
-  it("pipeline runs end-to-end without catalog file (Dual Mode Bipartite)", () => {
+  it("pipeline runs with CLUSTERING strategy without catalog file", () => {
     const orderFiles = [
       {
         fileName: "pos.xlsx",
@@ -212,8 +206,8 @@ describe("Bipartite Matching & Progressive Crosswalk (Mechanisms 3 & 4)", () => 
       },
     ];
 
-    const pipelineRes = runPipeline(orderFiles, null);
-    expect(pipelineRes.integrationMode).toBe("BIPARTITE_MATCHING");
+    const pipelineRes = runPipeline(orderFiles, null, { resolutionStrategy: "CLUSTERING" });
+    expect(pipelineRes.integrationMode).toBe("CLUSTERING");
     expect(pipelineRes.integrated.length).toBe(2);
     expect(pipelineRes.integrated[0].ten_sp).toBe("Đắc Nhân Tâm");
   });
