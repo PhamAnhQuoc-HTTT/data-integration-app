@@ -1,16 +1,21 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
 import {
   UploadCloud, Layers, Package, CheckCircle2, AlertTriangle,
   RotateCcw, Download, BarChart3, Table2, ListChecks, Loader2, ArrowRight, Trash2,
-  Settings, ShieldCheck, Check, X, Sliders, FileText, Filter, RefreshCw
+  Settings, ShieldCheck, Check, X, Sliders, FileText, Sparkles, Database, BookmarkCheck
 } from "lucide-react";
 import { detectFields, FIELD_LABELS } from "./logic/fieldMapping";
 import { runPipeline } from "./logic/pipeline";
 import { SEVERITY_LABELS, GROUP_LABELS } from "./logic/qualityRules";
+import {
+  saveProgressiveCrosswalkPair,
+  getProgressiveCrosswalk,
+  clearProgressiveCrosswalk,
+} from "./logic/bipartiteMatching";
 
 /* ============================== DESIGN TOKENS ============================== */
 const Tokens = () => (
@@ -83,10 +88,10 @@ function formatVND(n) { return isNaN(n) ? "—" : Math.round(n).toLocaleString("
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const PROCESSING_STEPS = [
-  "Đang đọc và chuẩn hóa dữ liệu (Mã đơn, Kênh, Trạng thái, Thương hiệu, Ngày)...",
-  "Đang đối chiếu sản phẩm 3 tầng (Mã định danh → Crosswalk → Token-sort fuzzy)...",
+  "Đang đọc và chuẩn hóa dữ liệu từ các tệp đơn hàng (Mã đơn, Kênh, Trạng thái, Thương hiệu, Ngày)...",
+  "Đang kích hoạt Cơ chế Ghép cặp tối ưu toàn cục (Bipartite Matching) & Đối chiếu Crosswalk...",
   "Đang kiểm tra chất lượng dữ liệu 6 nhóm lỗi (Schema, Entity, Value, Temporal, Semantic, Technical)...",
-  "Đang tổng hợp dữ liệu tích hợp và báo cáo chất lượng...",
+  "Đang tổng hợp dữ liệu tích hợp và báo cáo chất lượng quản trị...",
 ];
 
 const MAX_ORDER_FILES = 4;
@@ -105,13 +110,13 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dra
 
   return (
     <div className="bsi-card relative p-5 pt-6">
-      <span className="bsi-tab-label">Ô 1</span>
+      <span className="bsi-tab-label">Ô 1 (Bắt buộc)</span>
       <div className="flex items-center gap-2 mb-1">
         <Layers size={17} style={{ color: "var(--brass)" }} />
-        <h3 className="bsi-serif font-semibold text-[15px]">Đơn hàng (mọi nguồn bán)</h3>
+        <h3 className="bsi-serif font-semibold text-[15px]">Tệp Đơn Hàng Các Kênh (Tối thiểu 1 hoặc 2 tệp)</h3>
       </div>
       <p className="text-[12.5px] mb-3" style={{ color: "var(--ink-soft)" }}>
-        Kéo thả file đơn hàng từ POS/Excel nội bộ và/hoặc sàn TMĐT (Shopee, Lazada, TikTok Shop) — tối đa {maxFiles} tệp.
+        Kéo thả 2 hoặc nhiều tệp đơn hàng từ POS tại quầy và các sàn TMĐT (Shopee, Lazada, TikTok Shop).
       </p>
       {!full && (
         <>
@@ -148,11 +153,6 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dra
                   <span key={f} className="bsi-badge" style={{ background: "var(--paper)", color: "var(--ink-soft)" }}>{FIELD_LABELS[f]}</span>
                 ))}
               </div>
-              {fileState.dataRows.length === 0 && (
-                <p className="text-[11.5px] mt-1.5 flex items-center gap-1" style={{ color: "var(--brick)" }}>
-                  <AlertTriangle size={12} /> Không đọc được dòng dữ liệu nào — kiểm tra lại tệp.
-                </p>
-              )}
             </div>
           ))}
         </div>
@@ -162,7 +162,7 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dra
   );
 }
 
-function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, dragOverKey, setDragOverKey }) {
+function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, dragOverKey, setDragOverKey, onRemove }) {
   const inputId = `bsi-file-${tag}`;
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -174,40 +174,45 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
   return (
     <div className="bsi-card relative p-5 pt-6">
       <span className="bsi-tab-label">{tag}</span>
-      <div className="flex items-center gap-2 mb-1">
-        <Icon size={17} style={{ color: "var(--brass)" }} />
-        <h3 className="bsi-serif font-semibold text-[15px]">{title}</h3>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-2">
+          <Icon size={17} style={{ color: "var(--brass)" }} />
+          <h3 className="bsi-serif font-semibold text-[15px]">{title}</h3>
+        </div>
+        <span className="bsi-badge" style={{ background: "var(--brass-soft)", color: "#7A5A15" }}>Tùy chọn</span>
       </div>
       <p className="text-[12.5px] mb-3" style={{ color: "var(--ink-soft)" }}>{hint}</p>
-      <label htmlFor={inputId}
-        className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-1.5 rounded py-6 px-3 cursor-pointer text-center`}
-        onDragOver={(e) => { e.preventDefault(); setDragOverKey(dragKey); }}
-        onDragLeave={() => setDragOverKey(null)} onDrop={handleDrop}>
-        <UploadCloud size={20} style={{ color: "var(--ink-soft)" }} />
-        <span className="text-[12.5px] font-medium">Kéo thả hoặc bấm để chọn tệp</span>
-        <span className="text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>.csv · .xlsx · .xls</span>
-      </label>
-      <input id={inputId} type="file" accept=".csv,.xlsx,.xls" className="hidden"
-        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
-      {fileState && (
+      
+      {!fileState ? (
+        <>
+          <label htmlFor={inputId}
+            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-1.5 rounded py-6 px-3 cursor-pointer text-center`}
+            onDragOver={(e) => { e.preventDefault(); setDragOverKey(dragKey); }}
+            onDragLeave={() => setDragOverKey(null)} onDrop={handleDrop}>
+            <UploadCloud size={20} style={{ color: "var(--ink-soft)" }} />
+            <span className="text-[12.5px] font-medium">Kéo thả nếu có (Không bắt buộc)</span>
+            <span className="text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>.csv · .xlsx · .xls</span>
+          </label>
+          <input id={inputId} type="file" accept=".csv,.xlsx,.xls" className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
+        </>
+      ) : (
         <div className="mt-3 rounded p-2.5" style={{ background: "var(--moss-soft)" }}>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0">
               <CheckCircle2 size={14} style={{ color: "var(--moss)", flexShrink: 0 }} />
               <span className="text-[12px] font-medium truncate">{fileState.fileName}</span>
             </div>
-            <span className="text-[11px] bsi-mono flex-shrink-0" style={{ color: "var(--ink-soft)" }}>{fileState.dataRows.length} dòng</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>{fileState.dataRows.length} dòng</span>
+              <button onClick={onRemove} aria-label="Xóa tệp"><Trash2 size={13} style={{ color: "var(--brick)" }} /></button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-1 mt-2">
             {Object.entries(fileState.mapping).filter(([, i]) => i >= 0).map(([f]) => (
               <span key={f} className="bsi-badge" style={{ background: "var(--paper)", color: "var(--ink-soft)" }}>{FIELD_LABELS[f]}</span>
             ))}
           </div>
-          {fileState.dataRows.length === 0 && (
-            <p className="text-[11.5px] mt-1.5 flex items-center gap-1" style={{ color: "var(--brick)" }}>
-              <AlertTriangle size={12} /> Không đọc được dòng dữ liệu nào — kiểm tra lại tệp.
-            </p>
-          )}
         </div>
       )}
     </div>
@@ -261,8 +266,13 @@ export default function DataIntegrationTool() {
   const [parseError, setParseError] = useState("");
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // Manual confirmations state (Mở rộng 1)
+  // Cơ chế chọn khi không có file chuẩn: 'bipartite' (Cơ chế 3 & 4 - Mặc định) | 'master_source' (Cơ chế 1)
+  const [noCatalogMode, setNoCatalogMode] = useState("bipartite");
+  const [selectedMasterSourceIdx, setSelectedMasterSourceIdx] = useState(0);
+
+  // Progressive Crosswalk & Manual Confirmations
   const [manualConfirmations, setManualConfirmations] = useState(new Map());
+  const [crosswalkCount, setCrosswalkCount] = useState(0);
 
   // Configuration settings (Mở rộng 3)
   const [config, setConfig] = useState({
@@ -272,6 +282,10 @@ export default function DataIntegrationTool() {
     autoNormalizeChannels: true,
     autoNormalizeStatus: true,
   });
+
+  useEffect(() => {
+    setCrosswalkCount(getProgressiveCrosswalk().length);
+  }, []);
 
   const parseToFileState = async (file) => {
     const buf = await file.arrayBuffer();
@@ -309,7 +323,8 @@ export default function DataIntegrationTool() {
     setManualConfirmations(new Map());
   };
 
-  const readyToProcess = catalogFile?.dataRows.length > 0 && orderFiles.length > 0 && orderFiles.every((f) => f.dataRows.length > 0);
+  // Sẵn sàng xử lý nếu có ít nhất 1 file đơn hàng
+  const readyToProcess = orderFiles.length > 0 && orderFiles.every((f) => f.dataRows.length > 0);
 
   const processAll = async () => {
     setStep("processing"); setProcIdx(0);
@@ -317,7 +332,17 @@ export default function DataIntegrationTool() {
     await delay(500); setProcIdx(2);
     await delay(500);
 
-    const { integrated, issues, issuesSummary, stats } = runPipeline(orderFiles, catalogFile);
+    const pipelineOptions = {
+      fuzzyHighThreshold: config.fuzzyHighThreshold,
+      fuzzyConfirmThreshold: config.fuzzyConfirmThreshold,
+      masterSourceIndex: !catalogFile && noCatalogMode === "master_source" ? selectedMasterSourceIdx : null,
+    };
+
+    const { integrated, issues, issuesSummary, stats, integrationMode, bipartiteStats, synthesizedCatalog } = runPipeline(
+      orderFiles,
+      catalogFile,
+      pipelineOptions
+    );
     setProcIdx(3); await delay(400);
 
     const revenueTotal = integrated.reduce((s, r) => s + r.thanh_tien, 0);
@@ -329,25 +354,39 @@ export default function DataIntegrationTool() {
     integrated.forEach((r) => { const key = r.ten_sp || "(Không rõ)"; productMap.set(key, (productMap.get(key) || 0) + r.so_luong); });
     const topProducts = [...productMap.entries()].map(([ten, soLuong]) => ({ ten, soLuong })).sort((a, b) => b.soLuong - a.soLuong).slice(0, 8);
 
-    // Filter items needing manual confirmation (Mở rộng 1)
     const pendingConfirmations = integrated.filter((r) => r.matchStatus === "NEEDS_CONFIRMATION" || r.matchStatus === "UNRESOLVED");
 
     setResult({
       integrated, issues, issuesSummary, stats,
       revenueTotal, revenueByChannel, topProducts,
       pendingConfirmations,
+      integrationMode,
+      bipartiteStats,
+      synthesizedCatalog,
       fileBreakdown: orderFiles.map((f) => `${f.fileName} (${f.dataRows.length})`).join(" · "),
     });
     setStep("results");
   };
 
-  // Mở rộng 1: Handle manual decision (Accept / Reject / Select Custom)
-  const handleManualDecision = (rowIndex, decision, chosenProduct = null) => {
+  // Mở rộng 1 + Cơ chế 4: Xác nhận thủ công & Lưu vào Progressive Crosswalk
+  const handleManualDecision = (rowIndex, decision, item) => {
     setManualConfirmations((prev) => {
       const next = new Map(prev);
-      next.set(rowIndex, { decision, chosenProduct });
+      next.set(rowIndex, { decision, item });
       return next;
     });
+
+    if (decision === "ACCEPT" && item.matched) {
+      saveProgressiveCrosswalkPair(item.ten_sp, item.matched.ten_sp, item.matched);
+      setCrosswalkCount(getProgressiveCrosswalk().length);
+    }
+  };
+
+  const handleClearCrosswalk = () => {
+    if (window.confirm("Bạn có chắc muốn xóa toàn bộ bộ nhớ Progressive Crosswalk tích lũy?")) {
+      clearProgressiveCrosswalk();
+      setCrosswalkCount(0);
+    }
   };
 
   const exportSummaryFile = () => {
@@ -365,10 +404,6 @@ export default function DataIntegrationTool() {
         } else if (manual.decision === "REJECT") {
           matchSt = "REJECTED_USER";
           idCode = "—";
-        } else if (manual.decision === "SELECT" && manual.chosenProduct) {
-          matchSt = "MANUALLY_MAPPED";
-          prodName = manual.chosenProduct.ten_sp;
-          idCode = manual.chosenProduct.ma_dinh_danh;
         }
       }
 
@@ -441,15 +476,17 @@ export default function DataIntegrationTool() {
                     onChange={(e) => setConfig({ ...config, priceDeviationThreshold: Number(e.target.value) })} className="w-full" />
                   <span className="text-[11.5px]" style={{ color: "var(--ink-soft)" }}>Cảnh báo khi giá bán chênh quá {config.priceDeviationThreshold}% so với giá chuẩn catalog.</span>
                 </div>
-                <div className="space-y-2 pt-2 border-t" style={{ borderColor: "var(--line)" }}>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={config.autoNormalizeChannels} onChange={(e) => setConfig({ ...config, autoNormalizeChannels: e.target.checked })} />
-                    <span>Tự động chuẩn hóa tên kênh bán (Shopee, Lazada, TikTok Shop, POS)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={config.autoNormalizeStatus} onChange={(e) => setConfig({ ...config, autoNormalizeStatus: e.target.checked })} />
-                    <span>Tự động chuẩn hóa trạng thái đơn (Hoàn thành, Đã hủy, Đang xử lý, Trả hàng)</span>
-                  </label>
+                
+                <div className="p-3 rounded border" style={{ borderColor: "var(--line)", background: "var(--paper)" }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold flex items-center gap-1.5"><BookmarkCheck size={15} style={{ color: "var(--moss)" }} /> Progressive Crosswalk (Cơ chế 4)</p>
+                      <p className="text-[11.5px]" style={{ color: "var(--ink-soft)" }}>Đã tích lũy <strong>{crosswalkCount}</strong> cặp liên kết từ người dùng.</p>
+                    </div>
+                    {crosswalkCount > 0 && (
+                      <button onClick={handleClearCrosswalk} className="text-[11.5px] text-red-700 underline">Xóa bộ nhớ</button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="mt-6 flex justify-end gap-2">
@@ -462,8 +499,7 @@ export default function DataIntegrationTool() {
         {step === "upload" && (
           <>
             <p className="text-[13.5px] mb-5 max-w-2xl" style={{ color: "var(--ink-soft)" }}>
-              Tải lên đơn hàng (POS/Excel nội bộ và/hoặc sàn TMĐT) và danh mục sản phẩm chuẩn.
-              Hệ thống phát hiện lỗi thuộc <strong>6 nhóm lỗi chuẩn</strong> và phân cấp <strong>3 mức xử lý an toàn</strong>.
+              Hỗ trợ tích hợp đa nguồn: Có sẵn file danh mục chuẩn <strong>HOẶC</strong> tự động đối chiếu chéo giữa các kênh với <strong>Ghép cặp tối ưu toàn cục (Bipartite Matching)</strong>.
             </p>
             {parseError && (
               <div className="bsi-card p-3 mb-4 flex items-center gap-2" style={{ borderColor: "var(--brick)", background: "var(--brick-soft)" }}>
@@ -471,16 +507,49 @@ export default function DataIntegrationTool() {
                 <span className="text-[12.5px]" style={{ color: "var(--brick)" }}>{parseError}</span>
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
               <OrdersDropzone files={orderFiles} onAddFile={addOrderFile} onRemoveFile={removeOrderFile}
                 maxFiles={MAX_ORDER_FILES} dragKey="orders" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
-              <UploadCard tag="Ô 2" icon={Package} title="Danh mục sản phẩm chuẩn"
-                hint="Danh sách sản phẩm kèm mã định danh, thương hiệu/NCC, giá chuẩn (bắt buộc)." fileState={catalogFile}
-                onFile={setCatalog} dragKey="catalog" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
+              <UploadCard tag="Ô 2 (Tùy chọn)" icon={Package} title="Danh mục sản phẩm chuẩn"
+                hint="Nếu có file Master Catalog, hệ thống sẽ đối chiếu theo file này. Nếu không có, hệ thống tự động ghép cặp tối ưu giữa các tệp đơn hàng."
+                fileState={catalogFile} onFile={setCatalog} onRemove={() => setCatalogFile(null)}
+                dragKey="catalog" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
             </div>
+
+            {/* Lựa chọn cơ chế khi không có File Danh mục chuẩn */}
+            {!catalogFile && orderFiles.length >= 2 && (
+              <div className="bsi-card p-4 mb-6 border" style={{ borderColor: "var(--brass)", background: "var(--paper-card)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles size={16} style={{ color: "var(--brass)" }} />
+                  <h4 className="bsi-serif text-[14px] font-semibold">Phương thức đối chiếu khi không có File Chuẩn</h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12.5px] mt-2">
+                  <label className={`p-3 rounded border cursor-pointer transition flex items-start gap-2.5 ${noCatalogMode === "bipartite" ? "border-amber-700 bg-amber-50/50" : "border-gray-200"}`}>
+                    <input type="radio" name="noCatMode" checked={noCatalogMode === "bipartite"} onChange={() => setNoCatalogMode("bipartite")} className="mt-0.5" />
+                    <div>
+                      <span className="font-semibold block text-[13px] text-amber-900">🌟 Ghép cặp tối ưu toàn cục (Bipartite Matching)</span>
+                      <span className="text-[11.5px] text-gray-600 block mt-0.5">Khuyên dùng (Cơ chế 3 & 4): Tránh tranh chấp khớp, tự động tổng hợp danh mục và ghi nhớ qua Progressive Crosswalk.</span>
+                    </div>
+                  </label>
+                  <label className={`p-3 rounded border cursor-pointer transition flex items-start gap-2.5 ${noCatalogMode === "master_source" ? "border-amber-700 bg-amber-50/50" : "border-gray-200"}`}>
+                    <input type="radio" name="noCatMode" checked={noCatalogMode === "master_source"} onChange={() => setNoCatalogMode("master_source")} className="mt-0.5" />
+                    <div>
+                      <span className="font-semibold block text-[13px]">📁 Chọn 1 tệp làm nguồn chuẩn (Cơ chế 1)</span>
+                      <select value={selectedMasterSourceIdx} onChange={(e) => setSelectedMasterSourceIdx(Number(e.target.value))}
+                        disabled={noCatalogMode !== "master_source"} className="mt-1 text-[11.5px] p-1 border rounded w-full bg-white">
+                        {orderFiles.map((f, idx) => (
+                          <option key={idx} value={idx}>Chuẩn: {f.fileName}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-end flex-wrap gap-3">
               <button onClick={processAll} disabled={!readyToProcess} className="bsi-btn-primary flex items-center gap-2 text-[14px] px-5 py-2.5">
-                Bắt đầu xử lý <ArrowRight size={15} />
+                Bắt đầu tích hợp <ArrowRight size={15} />
               </button>
             </div>
           </>
@@ -505,16 +574,23 @@ export default function DataIntegrationTool() {
 
         {step === "results" && result && (
           <div>
-            <div className="flex items-center gap-3 mb-5">
-              <span className="bsi-stamp">✓ ĐÃ ĐỐI CHIẾU</span>
-              <span className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
-                {result.stats.totalRows} giao dịch từ {orderFiles.length} tệp đơn hàng · đối chiếu với {result.stats.catalogSize} sản phẩm trong danh mục
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+              <div className="flex items-center gap-3">
+                <span className="bsi-stamp">✓ ĐÃ ĐỐI CHIẾU</span>
+                <span className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
+                  {result.stats.totalRows} giao dịch từ {orderFiles.length} tệp đơn hàng · {result.stats.catalogSize} sản phẩm trong danh mục
+                </span>
+              </div>
+              <span className="bsi-badge" style={{ background: "var(--navy)", color: "#fff" }}>
+                {result.integrationMode === "MASTER_CATALOG" ? "Chế độ: Có Master Catalog"
+                  : result.integrationMode === "BIPARTITE_MATCHING" ? "Cơ chế: Ghép cặp tối ưu (Bipartite + Crosswalk)"
+                  : "Cơ chế: Nguồn chuẩn chỉ định"}
               </span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <StatCard label="Tổng giao dịch" value={result.stats.totalRows} sub={result.fileBreakdown} />
-              <StatCard label="Tỷ lệ khớp danh mục" value={`${result.stats.totalRows ? ((result.stats.matchedCount / result.stats.totalRows) * 100).toFixed(0) : 0}%`}
+              <StatCard label="Tỷ lệ khớp thực thể" value={`${result.stats.totalRows ? ((result.stats.matchedCount / result.stats.totalRows) * 100).toFixed(0) : 0}%`}
                 sub={`${result.stats.matchedCount}/${result.stats.totalRows} dòng`} tone="moss" />
               <StatCard label="Số lỗi phát hiện (6 nhóm)" value={result.issues.length} sub="xem chi tiết ở tab Vấn đề" tone="brick" />
               <StatCard label="Doanh thu tổng hợp" value={formatVND(result.revenueTotal)} sub={`đã gộp ${orderFiles.length} tệp`} tone="brass" />
@@ -610,11 +686,16 @@ export default function DataIntegrationTool() {
             {/* Mở rộng 1: UI Xác nhận thủ công các trường hợp Entity Resolution không chắc chắn */}
             {activeTab === "manual_confirm" && (
               <div className="bsi-card p-5">
-                <div className="mb-4">
-                  <h3 className="bsi-serif text-[15px] font-semibold mb-1">Xác Nhận Thủ Công Entity Resolution (Mở Rộng #1)</h3>
-                  <p className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
-                    Hệ thống khoanh vùng các trường hợp đối chiếu không chắc chắn (NEEDS_CONFIRMATION / UNRESOLVED) để người dùng kiểm tra và ra quyết định.
-                  </p>
+                <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h3 className="bsi-serif text-[15px] font-semibold mb-1">Xác Nhận Thủ Công & Học Tích Lũy (Progressive Crosswalk)</h3>
+                    <p className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
+                      Khi bạn bấm <strong>Chấp nhận</strong>, hệ thống sẽ tự động ghi nhớ liên kết này vào bộ nhớ để các lần tích hợp sau chính xác 100%.
+                    </p>
+                  </div>
+                  <span className="text-[12px] bsi-mono px-2 py-1 bg-amber-100 text-amber-800 rounded">
+                    Bộ nhớ tích lũy: {crosswalkCount} cặp
+                  </span>
                 </div>
                 {result.pendingConfirmations.length === 0 ? (
                   <p className="p-6 text-center text-[13px]" style={{ color: "var(--moss)" }}>
@@ -635,25 +716,25 @@ export default function DataIntegrationTool() {
                           </div>
                           {item.matched && (
                             <p className="text-[12px] mb-2" style={{ color: "var(--ink-soft)" }}>
-                              Đề xuất khớp: <strong>{item.matched.ten_sp}</strong> (Mã: {item.matched.ma_dinh_danh}) — Độ tương đồng: <strong>{item.matchScore}%</strong>
+                              Đề xuất ghép: <strong>{item.matched.ten_sp}</strong> (Mã: {item.matched.ma_dinh_danh}) — Độ tương đồng: <strong>{item.matchScore}%</strong>
                             </p>
                           )}
                           <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "var(--line)" }}>
                             <button
-                              onClick={() => handleManualDecision(idx, "ACCEPT")}
+                              onClick={() => handleManualDecision(idx, "ACCEPT", item)}
                               className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "ACCEPT" ? "bsi-btn-primary" : "bsi-btn-secondary"}`}
                             >
-                              <Check size={13} /> Chấp nhận đề xuất
+                              <Check size={13} /> Chấp nhận đề xuất (Lưu Crosswalk)
                             </button>
                             <button
-                              onClick={() => handleManualDecision(idx, "REJECT")}
+                              onClick={() => handleManualDecision(idx, "REJECT", item)}
                               className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "REJECT" ? "bg-red-800 text-white" : "bsi-btn-secondary"}`}
                             >
-                              <X size={13} /> Từ chối (Không tồn tại)
+                              <X size={13} /> Từ chối (Không cùng sản phẩm)
                             </button>
                             {manual && (
                               <span className="text-[11.5px] font-medium self-center ml-auto" style={{ color: "var(--moss)" }}>
-                                ✓ Đã xác nhận: {manual.decision === "ACCEPT" ? "Chấp nhận đề xuất" : "Từ chối khống khớp"}
+                                ✓ Đã ghi nhận: {manual.decision === "ACCEPT" ? "Đã lưu vào bộ nhớ Crosswalk" : "Đã từ chối khớp"}
                               </span>
                             )}
                           </div>
@@ -673,6 +754,21 @@ export default function DataIntegrationTool() {
                   <p className="text-[12.5px] mb-4" style={{ color: "var(--ink-soft)" }}>
                     Thống kê chi tiết chất lượng dữ liệu trước và sau khi đi qua pipeline xử lý & đối chiếu.
                   </p>
+                  
+                  {result.bipartiteStats && (
+                    <div className="mb-5 p-3.5 rounded border" style={{ borderColor: "var(--brass)", background: "var(--paper)" }}>
+                      <h4 className="text-[13px] font-semibold mb-2 text-amber-900 flex items-center gap-1.5">
+                        <Sparkles size={15} /> Thống Kê Ghép Cặp Tối Ưu Toàn Cục (Bipartite Matching)
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[12px]">
+                        <div>Sản phẩm duy nhất Nguồn 1: <strong>{result.bipartiteStats.totalUniqueSource1}</strong></div>
+                        <div>Sản phẩm duy nhất Nguồn 2: <strong>{result.bipartiteStats.totalUniqueSource2}</strong></div>
+                        <div>Cặp ghép tối ưu thành công: <strong className="text-green-700">{result.bipartiteStats.matchedPairsCount}</strong></div>
+                        <div>Sản phẩm riêng lẻ không ghép: <strong>{result.bipartiteStats.unmatchedSource1Count + result.bipartiteStats.unmatchedSource2Count}</strong></div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                     <div className="border rounded p-3 text-center" style={{ borderColor: "var(--line)" }}>
                       <p className="text-[11px] uppercase font-semibold text-gray-500">Tỷ lệ dữ liệu sạch ban đầu</p>

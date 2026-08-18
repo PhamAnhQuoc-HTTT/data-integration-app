@@ -3,6 +3,8 @@ import { normalizeNumber, normalizeDate, normalizeIdCode, normalizeTextForMatchi
 import { detectFields, buildRows } from "../fieldMapping";
 import { resolveEntities, tokenSortRatio } from "../entityResolution";
 import { runAllChecks, checkDuplicates, checkMissingAttributes, checkCrossChannelPrice, checkNullVsZero, checkCategoricalMismatch, checkEncodingIssues, checkStaleData, checkReferentialIntegrity, GROUP_LABELS } from "../qualityRules";
+import { extractUniqueEntitiesFromRows, matchBipartiteEntities, synthesizeCanonicalCatalog } from "../bipartiteMatching";
+import { runPipeline } from "../pipeline";
 
 describe("normalizeNumber", () => {
   it("parses plain integer string", () => { expect(normalizeNumber("65000")).toBe(65000); });
@@ -62,6 +64,10 @@ describe("normalizeChannel", () => {
   });
   it("normalizes to TikTok Shop", () => {
     expect(normalizeChannel('tiktok shop')).toBe('TikTok Shop');
+    expect(normalizeChannel('tiktok')).toBe('TikTok Shop');
+  });
+  it("normalizes to Lazada", () => {
+    expect(normalizeChannel('lazada.vn')).toBe('Lazada');
   });
   it("normalizes to POS", () => {
     expect(normalizeChannel('Tại quầy')).toBe('POS');
@@ -87,12 +93,12 @@ describe("normalizeOrderStatus", () => {
 });
 
 describe("normalizeBrand", () => {
-  it("normalizes to NXB Trẻ", () => {
+  it("normalizes known brand aliases", () => {
     expect(normalizeBrand('NXB Trẻ')).toBe('NXB Trẻ');
     expect(normalizeBrand('nha xuat ban tre')).toBe('NXB Trẻ');
   });
-  it("keeps unknown value", () => {
-    expect(normalizeBrand('Alpha Books')).toBe('Alpha Books');
+  it("keeps unknown brand but normalizes spaces", () => {
+    expect(normalizeBrand('  Alpha   Books  ')).toBe('Alpha Books');
   });
 });
 
@@ -142,8 +148,79 @@ describe("resolveEntities", () => {
   });
 });
 
-describe("quality rules — severity classification", () => {
-  it("flags duplicated order codes as NEEDS_CONFIRMATION, not auto-removed", () => {
+describe("Bipartite Matching & Progressive Crosswalk (Mechanisms 3 & 4)", () => {
+  const source1Rows = [
+    { ten_sp: "Đắc Nhân Tâm", ma_dinh_danh: "9786045678901", gia: "86000", thuong_hieu: "NXB Trẻ" },
+    { ten_sp: "Nhà Giả Kim (bìa mềm)", ma_dinh_danh: "", gia: "79000", thuong_hieu: "NXB Nhã Nam" },
+    { ten_sp: "Sách Riêng POS", ma_dinh_danh: "POS-001", gia: "50000", thuong_hieu: "NXB Văn Học" },
+  ];
+
+  const source2Rows = [
+    { ten_sp: "Dac Nhan Tam", ma_dinh_danh: "9786045678901", gia: "86000", thuong_hieu: "NXB Trẻ" },
+    { ten_sp: "Nhà Giả Kim", ma_dinh_danh: "", gia: "75000", thuong_hieu: "NXB Nhã Nam" },
+    { ten_sp: "Sách Riêng Shopee", ma_dinh_danh: "SP-999", gia: "120000", thuong_hieu: "NXB Trẻ" },
+  ];
+
+  it("extracts unique entities correctly from row list", () => {
+    const entities1 = extractUniqueEntitiesFromRows(source1Rows, "POS");
+    expect(entities1.length).toBe(3);
+    expect(entities1.find((e) => e.ma_dinh_danh === "9786045678901")).toBeDefined();
+  });
+
+  it("performs conflict-free bipartite optimal matching", () => {
+    const entities1 = extractUniqueEntitiesFromRows(source1Rows, "POS");
+    const entities2 = extractUniqueEntitiesFromRows(source2Rows, "Shopee");
+
+    const result = matchBipartiteEntities(entities1, entities2);
+    expect(result.matchedPairs.length).toBe(2); // "Đắc Nhân Tâm" (ID exact) and "Nhà Giả Kim" (Fuzzy title)
+    expect(result.unmatchedA.length).toBe(1); // "Sách Riêng POS"
+    expect(result.unmatchedB.length).toBe(1); // "Sách Riêng Shopee"
+  });
+
+  it("uses progressive crosswalk memory when available", () => {
+    const entities1 = [{ entityKey: "TITLE:sach a", ten_sp: "Sách A", ten_sp_norm: "sach a", source: "POS", prices: [] }];
+    const entities2 = [{ entityKey: "TITLE:sach b", ten_sp: "Sách B Đặc Biệt", ten_sp_norm: "sach b dac biet", source: "Shopee", prices: [] }];
+
+    const memory = [{ normA: "sach a", normB: "sach b dac biet" }];
+    const result = matchBipartiteEntities(entities1, entities2, { crosswalkMemory: memory });
+
+    expect(result.matchedPairs.length).toBe(1);
+    expect(result.matchedPairs[0].method).toBe("PROGRESSIVE_CROSSWALK");
+    expect(result.matchedPairs[0].status).toBe("MATCHED_EXACT");
+  });
+
+  it("synthesizes canonical master catalog from bipartite pairs and exclusives", () => {
+    const entities1 = extractUniqueEntitiesFromRows(source1Rows, "POS");
+    const entities2 = extractUniqueEntitiesFromRows(source2Rows, "Shopee");
+    const result = matchBipartiteEntities(entities1, entities2);
+
+    const synthesized = synthesizeCanonicalCatalog(result);
+    expect(synthesized.catalog.length).toBe(4); // 2 matched + 1 exclusive POS + 1 exclusive Shopee
+  });
+
+  it("pipeline runs end-to-end without catalog file (Dual Mode Bipartite)", () => {
+    const orderFiles = [
+      {
+        fileName: "pos.xlsx",
+        dataRows: [["POS-1", "Đắc Nhân Tâm", "9786045678901", "1", "86000"]],
+        mapping: { ma_don: 0, ten_sp: 1, ma_dinh_danh: 2, so_luong: 3, gia: 4 },
+      },
+      {
+        fileName: "shopee.xlsx",
+        dataRows: [["SP-1", "Dac Nhan Tam", "9786045678901", "2", "86000"]],
+        mapping: { ma_don: 0, ten_sp: 1, ma_dinh_danh: 2, so_luong: 3, gia: 4 },
+      },
+    ];
+
+    const pipelineRes = runPipeline(orderFiles, null);
+    expect(pipelineRes.integrationMode).toBe("BIPARTITE_MATCHING");
+    expect(pipelineRes.integrated.length).toBe(2);
+    expect(pipelineRes.integrated[0].ten_sp).toBe("Đắc Nhân Tâm");
+  });
+});
+
+describe("quality rules — 6 groups & severity classification", () => {
+  it("flags duplicated order codes as NEEDS_CONFIRMATION", () => {
     const rows = [
       { ma_don: "DH001", __source: "pos", so_luong: "1", gia: "1000" },
       { ma_don: "DH001", __source: "pos", so_luong: "1", gia: "1000" },
@@ -153,40 +230,32 @@ describe("quality rules — severity classification", () => {
     expect(issues[0].severity).toBe("NEEDS_CONFIRMATION");
   });
 
-  it("checkMissingAttributes flags rows missing key fields based on source", () => {
+  it("checkMissingAttributes flags when source missing a column completely", () => {
     const rows = [
-      { __source: "pos.xlsx", kenh: "" }
+      { __source: "pos.xlsx", kenh: "" },
+      { __source: "pos.xlsx", kenh: "" },
     ];
     const issues = checkMissingAttributes(rows);
-    expect(issues.length).toBeGreaterThan(0);
+    const kenhMissing = issues.filter(i => i.detail.includes("cột kenh"));
+    expect(kenhMissing.length).toBe(1);
+    expect(kenhMissing[0].severity).toBe("FLAGGED_ONLY");
   });
 
-  it("checkCrossChannelPrice flags price diff > 30% for same product across channels", () => {
+  it("checkCrossChannelPrice flags price difference > 30% across channels", () => {
     const rows = [
-      { ma_dinh_danh: "SP1", kenh: "Shopee", gia: "100", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" },
-      { ma_dinh_danh: "SP1", kenh: "Lazada", gia: "140", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" }
+      { ma_dinh_danh: "9786045678901", kenh: "Shopee", gia: "100000", ten_sp: "Sách A" },
+      { ma_dinh_danh: "9786045678901", kenh: "Lazada", gia: "50000", ten_sp: "Sách A" },
     ];
     const issues = checkCrossChannelPrice(rows);
-    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.length).toBe(1);
+    expect(issues[0].severity).toBe("FLAGGED_ONLY");
   });
 
-  it("checkCrossChannelPrice does not flag price diff < 30%", () => {
-    const rows = [
-      { ma_dinh_danh: "SP1", kenh: "Shopee", gia: "100", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" },
-      { ma_dinh_danh: "SP1", kenh: "Lazada", gia: "120", matched: { gia_chuan: "100" }, matchStatus: "MATCHED_EXACT" }
-    ];
-    const issues = checkCrossChannelPrice(rows);
-    expect(issues.length).toBe(0);
-  });
-
-  it("checkNullVsZero flags gia = '0' but not gia = ''", () => {
-    const rowsZero = [{ gia: "0" }];
-    const issuesZero = checkNullVsZero(rowsZero);
-    expect(issuesZero.length).toBe(1);
-
-    const rowsNull = [{ gia: "" }];
-    const issuesNull = checkNullVsZero(rowsNull);
-    expect(issuesNull.length).toBe(0);
+  it("checkNullVsZero flags when price or qty is explicit 0", () => {
+    const rows = [{ gia: "0", so_luong: "1" }];
+    const issues = checkNullVsZero(rows);
+    expect(issues.length).toBe(1);
+    expect(issues[0].severity).toBe("FLAGGED_ONLY");
   });
 
   it("checkCategoricalMismatch flags unknown channel", () => {

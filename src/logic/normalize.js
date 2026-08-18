@@ -230,6 +230,15 @@ export function normalizeBrand(value) {
   
   const matchStr = removeDiacritics(normValue).toLowerCase().replace(/\s+/g, " ").trim();
   
+  if (matchStr.includes("kim dong")) return "NXB Kim Đồng";
+  if (matchStr.includes("nha xuat ban tre") || matchStr.includes("nxb tre") || matchStr === "tre") return "NXB Trẻ";
+  if (matchStr.includes("nha nam")) return "NXB Nhã Nam";
+  if (matchStr.includes("hoi nha van")) return "NXB Hội Nhà Văn";
+  if (matchStr.includes("the gioi")) return "NXB Thế Giới";
+  if (matchStr.includes("tong hop")) return "NXB Tổng Hợp TP.HCM";
+  if (matchStr.includes("giao duc")) return "NXB Giáo Dục";
+  if (matchStr.includes("van hoc")) return "NXB Văn Học";
+  
   const map = {
     'nxb tre': 'NXB Trẻ',
     'nha xuat ban tre': 'NXB Trẻ',
