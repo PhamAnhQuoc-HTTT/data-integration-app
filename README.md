@@ -1,8 +1,8 @@
 # 🛒 Hệ Thống Tích Hợp & Kiểm Soát Chất Lượng Dữ Liệu Bán Hàng Đa Nguồn
 
 Dự án Khóa luận tốt nghiệp ngành Hệ thống thông tin — Trường Đại học Công nghệ Thông tin (UIT — ĐHQG TP.HCM).  
-**Sinh viên thực hiện:** Phạm Anh Quốc (DA) & Trần Thanh Huy (BA).  
-**🌐 Live Demo (Vercel):** [https://data-integration-app-phamanhquoc-httts-projects.vercel.app](https://data-integration-app-phamanhquoc-httts-projects.vercel.app)
+**Sinh viên thực hiện:** Phạm Anh Quốc & Trần Thanh Huy.  
+**🌐 Live Demo (Vercel):** [https://data-integration-app-uit.vercel.app/](https://data-integration-app-uit.vercel.app/)
 
 ---
 
