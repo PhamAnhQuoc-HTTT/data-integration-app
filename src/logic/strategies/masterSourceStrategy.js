@@ -5,7 +5,14 @@
 import { resolveEntities } from "../entityResolution";
 import { extractUniqueEntitiesFromRows } from "../bipartiteMatching";
 
-export function executeMasterSourceStrategy({ allRows, orderFiles, masterSourceIndex = 0, crosswalk = [] }) {
+export function executeMasterSourceStrategy({
+  allRows,
+  orderFiles,
+  masterSourceIndex = 0,
+  crosswalk = [],
+  fuzzyHighThreshold = 90,
+  fuzzyConfirmThreshold = 70,
+}) {
   const safeIdx = Math.max(0, Math.min(masterSourceIndex, orderFiles.length - 1));
   const masterFileName = orderFiles[safeIdx]?.fileName || `Tệp ${safeIdx + 1}`;
 
@@ -25,13 +32,17 @@ export function executeMasterSourceStrategy({ allRows, orderFiles, masterSourceI
     crosswalk,
     idField: "ma_dinh_danh",
     titleField: "ten_sp",
+    fuzzyHighThreshold,
+    fuzzyConfirmThreshold,
   });
+  const resolutionStats = resolved.stats;
 
   return {
     strategyKey: "MASTER_SOURCE",
     strategyLabel: `Cơ chế 1: Nguồn chuẩn chỉ định (${masterFileName})`,
     resolved,
     catalog,
+    resolutionStats,
     stats: {
       totalRows: resolved.length,
       catalogSize: catalog.length,

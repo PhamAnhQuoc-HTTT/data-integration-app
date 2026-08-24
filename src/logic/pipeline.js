@@ -1,12 +1,11 @@
 /**
  * Pipeline chính: gộp dữ liệu từ nhiều file đơn hàng + đối chiếu danh mục chuẩn
- * + kiểm soát chất lượng dữ liệu -> dataset tích hợp + báo cáo lỗi (có phân mức).
+ * + kiểm soát chất lượng dữ liệu -> dataset tích hợp + báo cáo chất lượng quản trị.
  *
- * Áp dụng Kiến trúc Strategy Pattern:
- *   - Chiến lược 0: CATALOG (Có Master Catalog)
- *   - Chiến lược 1: MASTER_SOURCE (Cơ chế 1: Chọn 1 nguồn làm chuẩn)
- *   - Chiến lược 2: CLUSTERING (Cơ chế 2: Tự động gom cụm)
- *   - Chiến lược 3: BIPARTITE (Cơ chế 3: Ghép cặp tối ưu toàn cục)
+ * Phục vụ trực tiếp 3 Câu hỏi nghiên cứu (Research Questions):
+ *   - RQ1: Hiệu quả ánh xạ & 7 nhóm chuẩn hóa dữ liệu.
+ *   - RQ2: Đánh giá cải thiện của đối chiếu thực thể nhiều tầng vs Exact Matching.
+ *   - RQ3: Đánh giá mức độ giảm sai lệch trong các báo cáo quản trị doanh thu & sản phẩm.
  */
 
 import { buildRows } from "./fieldMapping";
@@ -41,32 +40,82 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
   let allRows = [];
   const sourceRowsMap = new Map();
 
+  // Thống kê thô ban đầu phục vụ đánh giá RQ3 (Pre-integration Baseline)
+  let rawRevenueTotal = 0;
+  let rawUniqueTitles = new Set();
+  let rawOrderIdsMap = new Map();
+  let cancelledRevenue = 0;
+
   orderFiles.forEach((file, idx) => {
     const label = file.fileName || `Tệp ${idx + 1}`;
     const rows = buildRows(file.dataRows, file.mapping).map((r) => ({ ...r, __source: label, __sourceIndex: idx }));
     sourceRowsMap.set(label, rows);
     allRows = allRows.concat(rows);
+
+    rows.forEach((r) => {
+      const p = normalizeNumber(r.gia) || 0;
+      const q = normalizeNumber(r.so_luong) || 0;
+      rawRevenueTotal += p * q;
+      if (r.ten_sp) rawUniqueTitles.add(r.ten_sp.trim());
+      if (r.ma_don) {
+        rawOrderIdsMap.set(r.ma_don, (rawOrderIdsMap.get(r.ma_don) || 0) + 1);
+      }
+      const st = (r.trang_thai || "").toLowerCase();
+      if (st.includes("huy") || st.includes("cancel") || st.includes("tra hang") || st.includes("refund")) {
+        cancelledRevenue += p * q;
+      }
+    });
   });
 
-  // 2. Chuẩn hóa dữ liệu — áp dụng trước khi đối chiếu
+  // 2. Thống kê 7 nhóm chuẩn hóa phục vụ RQ1
+  let normStats = {
+    idCount: 0,
+    textCount: 0,
+    numberCount: 0,
+    dateCount: 0,
+    channelCount: 0,
+    statusCount: 0,
+    structureCount: 0,
+    encodingFixedCount: 0,
+  };
+
+  // Áp dụng 7 nhóm chuẩn hóa dữ liệu
   allRows = allRows.map((row) => {
     const rawKenh = row.kenh;
     const rawTrangThai = row.trang_thai;
+    const rawNgay = row.ngay;
+    const rawTen = row.ten_sp;
+    const rawId = row.ma_dinh_danh;
+
+    const normId = normalizeIdCode(rawId);
+    const normOrderId = normalizeOrderId(row.ma_don);
+    const normKenh = normalizeChannel(row.kenh) || row.__source;
+    const normStatus = normalizeOrderStatus(row.trang_thai);
+    const normBrand = normalizeBrand(row.thuong_hieu);
+    const normDate = normalizeDate(row.ngay) || row.ngay;
+
+    if (normId !== rawId) normStats.idCount++;
+    if (normBrand !== row.thuong_hieu || (rawTen && rawTen.trim() !== rawTen)) normStats.textCount++;
+    if (normDate !== rawNgay) normStats.dateCount++;
+    if (normKenh !== rawKenh) normStats.channelCount++;
+    if (normStatus !== rawTrangThai) normStats.statusCount++;
+    if (row._isUnpivoted) normStats.structureCount++;
+    if (row.ma_don && normOrderId !== row.ma_don) normStats.encodingFixedCount++;
 
     return {
       ...row,
-      ma_don: normalizeOrderId(row.ma_don),
-      kenh: normalizeChannel(row.kenh) || row.__source,
-      trang_thai: normalizeOrderStatus(row.trang_thai),
-      thuong_hieu: normalizeBrand(row.thuong_hieu),
-      ngay: normalizeDate(row.ngay) || row.ngay,
-      ma_dinh_danh: normalizeIdCode(row.ma_dinh_danh),
+      ma_don: normOrderId,
+      kenh: normKenh,
+      trang_thai: normStatus,
+      thuong_hieu: normBrand,
+      ngay: normDate,
+      ma_dinh_danh: normId,
       __raw_kenh: rawKenh,
       __raw_trang_thai: rawTrangThai,
     };
   });
 
-  // 3. Thực thi Chiến Lược Đối Chiếu Thực Thể (Strategy Pattern Dispatcher)
+  // 3. Thực thi Đối Chiếu Thực Thể (Strategy Pattern Dispatcher)
   const targetStrategyKey = (catalogFile && catalogFile.dataRows && catalogFile.dataRows.length > 0)
     ? "CATALOG"
     : resolutionStrategy;
@@ -85,7 +134,7 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
   const resolved = resolutionResult.resolved;
   const catalog = resolutionResult.catalog;
 
-  // 4. Kiểm soát chất lượng dữ liệu (đầy đủ 6 nhóm)
+  // 4. Kiểm soát chất lượng dữ liệu (6 nhóm lỗi)
   const issues = runAllChecks(resolved);
   const issuesByRow = new Map();
   issues.forEach((issue) => {
@@ -93,11 +142,29 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     issuesByRow.get(issue.rowIndex).push(issue);
   });
 
-  // 5. Xây dataset tích hợp cuối cùng
+  // 5. Xây dataset tích hợp cuối cùng & Đánh giá sai lệch báo cáo (RQ3)
+  let cleanRevenueTotal = 0;
+  let cleanUniqueProducts = new Set();
+  let duplicateRevenueDiscrepancy = 0;
+
   const integrated = resolved.map((row, i) => {
     const qty = normalizeNumber(row.so_luong) || 0;
     const price = normalizeNumber(row.gia) || 0;
     const rowIssues = issuesByRow.get(i) || [];
+    const lineTotal = qty * price;
+
+    const isCancelled = (row.trang_thai || "").toLowerCase().includes("hủy");
+    if (!isCancelled) {
+      cleanRevenueTotal += lineTotal;
+    }
+
+    const isDuplicate = (rawOrderIdsMap.get(row.ma_don) || 0) > 1;
+    if (isDuplicate) {
+      duplicateRevenueDiscrepancy += lineTotal / 2; // tính phần thừa trùng lặp
+    }
+
+    const finalTitle = row.matched ? row.matched.ten_sp : row.ten_sp;
+    if (finalTitle) cleanUniqueProducts.add(finalTitle);
 
     const idCode = row.matched ? row.matched.ma_dinh_danh : row.ma_dinh_danh;
     if (idCode) {
@@ -119,19 +186,32 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
       nguon: row.__source,
       ma_don: row.ma_don,
       ngay: row.ngay,
-      ten_sp: row.matched ? row.matched.ten_sp : row.ten_sp,
+      ten_sp: finalTitle,
       ma_dinh_danh: idCode,
       thuong_hieu: row.matched ? row.matched.thuong_hieu : row.thuong_hieu,
       kenh: row.kenh || row.__source,
       trang_thai: row.trang_thai,
       so_luong: qty,
       gia: price,
-      thanh_tien: qty * price,
+      thanh_tien: lineTotal,
       matchStatus: row.matchStatus,
       matchScore: row.matchScore,
+      matchTier: row.matchTier,
       issues: rowIssues,
     };
   });
+
+  // Báo cáo đo lường giảm sai lệch quản trị (RQ3 Governance Evaluation)
+  const governanceAudit = {
+    rawRevenueTotal,
+    cleanRevenueTotal,
+    revenueDiscrepancyPrevented: rawRevenueTotal - cleanRevenueTotal,
+    cancelledRevenuePrevented: cancelledRevenue,
+    duplicateRevenueDiscrepancy,
+    rawUniqueTitlesCount: rawUniqueTitles.size,
+    cleanUniqueProductsCount: cleanUniqueProducts.size,
+    productFragmentationReduced: Math.max(0, rawUniqueTitles.size - cleanUniqueProducts.size),
+  };
 
   return {
     integrated,
@@ -139,9 +219,12 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     issuesSummary: summarizeIssues(issues),
     integrationMode: resolutionResult.strategyKey,
     strategyLabel: resolutionResult.strategyLabel,
+    resolutionStats: resolutionResult.resolutionStats || null,
     bipartiteStats: resolutionResult.bipartiteStats || null,
     clustersStats: resolutionResult.clustersStats || null,
     synthesizedCatalog: catalog,
+    normStats,
+    governanceAudit,
     stats: {
       totalRows: integrated.length,
       catalogSize: catalog.length,
