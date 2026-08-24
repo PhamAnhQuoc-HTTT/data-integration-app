@@ -151,7 +151,7 @@ const PRESETS = {
 };
 
 /* ============================== UI SUBCOMPONENTS ============================== */
-function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dragOverKey, setDragOverKey }) {
+function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, maxFiles, dragKey, dragOverKey, setDragOverKey }) {
   const inputId = "bsi-file-orders";
   const full = files.length >= maxFiles;
   const handleDrop = useCallback((e) => {
@@ -201,6 +201,18 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, maxFiles, dragKey, dra
                     <Trash2 size={13} style={{ color: "var(--brick)" }} />
                   </button>
                 </div>
+              </div>
+              {/* Ô gắn nhãn Kênh / Sàn bán hàng */}
+              <div className="flex items-center gap-2 mt-2 p-1.5 rounded" style={{ background: "var(--paper)" }}>
+                <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "var(--ink-soft)" }}>Kênh bán:</span>
+                <input
+                  type="text"
+                  value={fileState.channelLabel || ""}
+                  onChange={(e) => onUpdateChannelLabel(i, e.target.value)}
+                  placeholder="VD: Shopee, TikTok Shop, POS, Lazada…"
+                  className="flex-1 text-[12px] px-2 py-1 rounded border outline-none bg-white"
+                  style={{ borderColor: "var(--line)" }}
+                />
               </div>
               <div className="flex flex-wrap gap-1 mt-2">
                 {Object.entries(fileState.mapping).filter(([k, idx]) => k !== "branchColumns" && idx >= 0).map(([f]) => (
@@ -367,6 +379,9 @@ export default function DataIntegrationTool() {
     }
   };
   const removeOrderFile = (idx) => setOrderFiles((prev) => prev.filter((_, i) => i !== idx));
+  const updateChannelLabel = (idx, label) => {
+    setOrderFiles((prev) => prev.map((f, i) => i === idx ? { ...f, channelLabel: label } : f));
+  };
   const setCatalog = async (file) => {
     setParseError("");
     try {
@@ -668,6 +683,7 @@ export default function DataIntegrationTool() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
               <OrdersDropzone files={orderFiles} onAddFile={addOrderFile} onRemoveFile={removeOrderFile}
+                onUpdateChannelLabel={updateChannelLabel}
                 maxFiles={MAX_ORDER_FILES} dragKey="orders" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
               <UploadCard tag="Ô 2 (Danh mục chuẩn)" icon={Package} title="Danh mục sản phẩm chuẩn (Master Catalog)"
                 hint="Tệp danh mục chuẩn làm cơ sở đối chiếu thực thể 3 tầng (Mã chuẩn -> Crosswalk -> Fuzzy Token-Sort) và kiểm soát chất lượng."
@@ -833,36 +849,60 @@ export default function DataIntegrationTool() {
                   <div className="space-y-3">
                     {result.pendingConfirmations.map((item, idx) => {
                       const manual = manualConfirmations.get(idx);
+                      const isUnresolved = item.matchStatus === "UNRESOLVED";
                       return (
-                        <div key={idx} className="border rounded p-3 text-[12.5px]" style={{ borderColor: "var(--line)", background: manual ? "var(--moss-soft)" : "var(--paper)" }}>
+                        <div key={idx} className="border rounded p-3 text-[12.5px]" style={{ borderColor: isUnresolved ? "var(--brick)" : "var(--line)", background: manual ? "var(--moss-soft)" : "var(--paper)" }}>
+                          {/* Phần 1: Sản phẩm gốc từ file đơn hàng */}
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <div>
-                              <span className="font-semibold">{item.ten_sp}</span>
-                              <span className="ml-2 text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>[{item.nguon} | {item.ma_don}]</span>
+                              <span className="text-[10.5px] uppercase font-semibold tracking-wide" style={{ color: "var(--ink-soft)" }}>Sản phẩm từ đơn hàng:</span>
+                              <div className="mt-0.5">
+                                <span className="font-semibold">{item.ten_sp || "(Không có tên)"}</span>
+                                <span className="ml-2 text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>
+                                  Nguồn: {item.nguon} · Mã đơn: {item.ma_don} {item.ma_dinh_danh ? `· Mã SP: ${item.ma_dinh_danh}` : "· (Không có mã SP)"}
+                                </span>
+                              </div>
                             </div>
                             <SeverityBadge severity={item.matchStatus} />
                           </div>
-                          {item.matched && (
-                            <p className="text-[12px] mb-2" style={{ color: "var(--ink-soft)" }}>
-                              Đề xuất ghép với Catalog: <strong>{item.matched.ten_sp}</strong> (Mã: {item.matched.ma_dinh_danh}) — Độ tương đồng: <strong>{item.matchScore}%</strong>
-                            </p>
+
+                          {/* Phần 2: Đề xuất ghép từ Catalog (hoặc thông báo UNRESOLVED) */}
+                          {item.matched ? (
+                            <div className="p-2.5 rounded mb-2" style={{ background: "var(--brass-soft)" }}>
+                              <span className="text-[10.5px] uppercase font-semibold tracking-wide" style={{ color: "#7A5A15" }}>⇄ Đề xuất ghép với sản phẩm chuẩn trong Catalog:</span>
+                              <div className="mt-1 flex flex-wrap items-center gap-3">
+                                <span className="font-semibold text-[13px]">{item.matched.ten_sp}</span>
+                                <span className="bsi-mono text-[11px]" style={{ color: "var(--ink-soft)" }}>Mã: {item.matched.ma_dinh_danh || "—"}</span>
+                                <span className="bsi-badge" style={{ background: "var(--paper-card)", color: "var(--brass)" }}>Độ tương đồng: {item.matchScore}%</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-2.5 rounded mb-2" style={{ background: "var(--brick-soft)" }}>
+                              <span className="text-[12px] font-medium" style={{ color: "var(--brick)" }}>
+                                ⚠ Không tìm thấy sản phẩm tương ứng nào trong Danh mục chuẩn (Master Catalog). Sản phẩm này có thể chưa được nhập vào catalog hoặc tên/mã quá khác biệt.
+                              </span>
+                            </div>
                           )}
+
+                          {/* Phần 3: Nút hành động */}
                           <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "var(--line)" }}>
-                            <button
-                              onClick={() => handleManualDecision(idx, "ACCEPT", item)}
-                              className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "ACCEPT" ? "bsi-btn-primary" : "bsi-btn-secondary"}`}
-                            >
-                              <Check size={13} /> Chấp nhận ghép
-                            </button>
+                            {item.matched && (
+                              <button
+                                onClick={() => handleManualDecision(idx, "ACCEPT", item)}
+                                className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "ACCEPT" ? "bsi-btn-primary" : "bsi-btn-secondary"}`}
+                              >
+                                <Check size={13} /> Chấp nhận ghép
+                              </button>
+                            )}
                             <button
                               onClick={() => handleManualDecision(idx, "REJECT", item)}
                               className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "REJECT" ? "bg-red-800 text-white" : "bsi-btn-secondary"}`}
                             >
-                              <X size={13} /> Từ chối (Không cùng sản phẩm)
+                              <X size={13} /> {item.matched ? "Từ chối (Không cùng sản phẩm)" : "Ghi nhận (Bỏ qua sản phẩm này)"}
                             </button>
                             {manual && (
                               <span className="text-[11.5px] font-medium self-center ml-auto" style={{ color: "var(--moss)" }}>
-                                ✓ Đã ghi nhận: {manual.decision === "ACCEPT" ? "Đã chấp nhận ghép" : "Đã từ chối ghép"}
+                                ✓ Đã ghi nhận: {manual.decision === "ACCEPT" ? "Đã chấp nhận ghép" : "Đã từ chối / bỏ qua"}
                               </span>
                             )}
                           </div>

@@ -104,6 +104,7 @@ export function buildRows(dataRows, mapping) {
               ma_dinh_danh,
               kenh: branch.branchName,
               trang_thai,
+              _isUnpivoted: true,
             });
           }
         });

@@ -48,7 +48,13 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
 
   orderFiles.forEach((file, idx) => {
     const label = file.fileName || `Tệp ${idx + 1}`;
-    const rows = buildRows(file.dataRows, file.mapping).map((r) => ({ ...r, __source: label, __sourceIndex: idx }));
+    const channelOverride = file.channelLabel ? file.channelLabel.trim() : null;
+    const rows = buildRows(file.dataRows, file.mapping).map((r) => ({
+      ...r,
+      __source: label,
+      __sourceIndex: idx,
+      __channelLabel: channelOverride,
+    }));
     sourceRowsMap.set(label, rows);
     allRows = allRows.concat(rows);
 
@@ -89,7 +95,7 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
 
     const normId = normalizeIdCode(rawId);
     const normOrderId = normalizeOrderId(row.ma_don);
-    const normKenh = normalizeChannel(row.kenh) || row.__source;
+    const normKenh = row.__channelLabel || normalizeChannel(row.kenh) || row.__source;
     const normStatus = normalizeOrderStatus(row.trang_thai);
     const normBrand = normalizeBrand(row.thuong_hieu);
     const normDate = normalizeDate(row.ngay) || row.ngay;

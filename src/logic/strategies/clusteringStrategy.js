@@ -138,7 +138,9 @@ export function executeClusteringStrategy({ allRows, fuzzyHighThreshold = 90, fu
     const cluster = itemToClusterMap.get(key);
     if (cluster) {
       const matchScore = row.ten_sp === cluster.canonical.ten_sp ? 100 : tokenSortRatio(normalizeTextForMatching(row.ten_sp), normalizeTextForMatching(cluster.canonical.ten_sp));
-      const status = matchScore >= fuzzyHighThreshold ? "MATCHED_FUZZY_HIGH" : "MATCHED_EXACT";
+      const status = matchScore === 100 ? "MATCHED_EXACT"
+        : matchScore >= fuzzyHighThreshold ? "MATCHED_FUZZY_HIGH"
+        : "NEEDS_CONFIRMATION";
 
       return {
         ...row,

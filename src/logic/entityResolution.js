@@ -71,7 +71,8 @@ export function resolveEntities(
   const crosswalkById = new Map();
   crosswalk.forEach((c) => {
     if (c.internal_code) {
-      crosswalkById.set(String(c.internal_code).toUpperCase(), c.standard_code || c.isbn);
+      const cleanKey = String(c.internal_code).replace(/[\s-]/g, "").toUpperCase();
+      crosswalkById.set(cleanKey, c.standard_code || c.isbn);
     }
   });
 
