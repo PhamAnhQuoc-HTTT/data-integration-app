@@ -5,17 +5,17 @@
 import { removeDiacritics } from "./normalize";
 
 export const FIELD_PATTERNS = {
-  ma_don: ["ma don", "ma hoa don", "order id", "ma dh", "so don", "ma giao dich", "stt"],
-  ngay: ["ngay gio", "ngay dat", "ngay ban", "ngay", "date"],
-  ten_sp: ["ten san pham", "san pham", "ten hang", "ten sp", "tieu de", "ten"],
-  thuong_hieu: ["ten ncc", "nha cung cap", "ncc", "ma ncc", "thuong hieu", "nha san xuat", "nha xuat ban", "nxb", "tac gia", "brand", "publisher", "manufacturer", "author"],
-  so_luong: ["so luong", "sl", "qty", "quantity"],
-  gia: ["gia ban", "don gia", "gia", "price", "gia bia", "gia niem yet"],
-  ma_dinh_danh: ["barcode", "isbn", "ma vach", "upc", "ean", "sku", "ma dinh danh", "ma san pham chuan", "ma sp chuan", "ma san pham", "ma sp"],
-  kenh: ["kenh", "channel", "chi nhanh", "nha sach", "cua hang"],
+  ma_don: ["ma don", "ma hoa don", "order id", "order", "ma dh", "so don", "ma giao dich", "stt", "invoice id", "invoice"],
+  ngay: ["ngay gio", "ngay dat", "ngay ban", "ngay", "date", "created at", "created", "order date", "time", "timestamp"],
+  ten_sp: ["ten san pham", "san pham", "ten hang", "ten sp", "tieu de", "ten", "product name", "product", "item name", "title"],
+  thuong_hieu: ["ten ncc", "nha cung cap", "ncc", "ma ncc", "thuong hieu", "nha san xuat", "nha xuat ban", "nxb", "tac gia", "brand", "publisher", "manufacturer", "author", "vendor"],
+  so_luong: ["so luong", "sl", "qty", "quantity", "count", "amount"],
+  gia: ["gia ban", "don gia", "gia", "price", "unit price", "gia bia", "gia niem yet", "cost", "selling price"],
+  ma_dinh_danh: ["barcode", "isbn", "ma vach", "upc", "ean", "sku id", "sku", "ma dinh danh", "ma san pham chuan", "ma sp chuan", "ma san pham", "ma sp", "item code"],
+  kenh: ["kenh", "channel", "chi nhanh", "nha sach", "cua hang", "platform"],
   danh_muc: ["the loai", "danh muc", "category", "genre", "phan loai"],
   gia_chuan: ["gia bia", "gia niem yet", "gia goc", "gia chuan", "list price"],
-  trang_thai: ["trang thai", "status"],
+  trang_thai: ["trang thai", "status", "tinh trang", "order status", "state"],
 };
 
 export const FIELD_LABELS = {
@@ -29,13 +29,20 @@ export const FIELD_LABELS = {
  * Tự động phát hiện các cột chi nhánh xuất bán (như FAHASA: GDNSBT, GDNSTD...)
  */
 export function detectFields(headers) {
-  const norm = headers.map((h) => removeDiacritics(h).toLowerCase().trim());
+  // Chuẩn hóa header: bỏ dấu, viết thường, chuyển _, -, . thành khoảng trắng
+  const norm = headers.map((h) =>
+    removeDiacritics(String(h || ""))
+      .toLowerCase()
+      .replace(/[_\-.]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
   const mapping = { branchColumns: [] };
 
   for (const [field, patterns] of Object.entries(FIELD_PATTERNS)) {
     let idx = -1;
     for (let i = 0; i < norm.length; i++) {
-      if (patterns.some((p) => norm[i].includes(p))) {
+      if (patterns.some((p) => norm[i].includes(p) || norm[i] === p)) {
         idx = i;
         break;
       }

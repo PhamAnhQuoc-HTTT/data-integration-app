@@ -175,14 +175,15 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     const idCode = row.matched ? row.matched.ma_dinh_danh : row.ma_dinh_danh;
     if (idCode) {
       const cleanId = String(idCode).replace(/[\s-]/g, "");
-      if (/^\d{13}$/.test(cleanId)) {
+      // Chỉ kiểm tra ISBN-13 khi mã bắt đầu bằng 978 hoặc 979 (tiêu chuẩn sách quốc tế)
+      if (/^(978|979)\d{10}$/.test(cleanId)) {
         const result = validateISBN13(cleanId);
         if (!result.valid) {
           rowIssues.push({
             rowIndex: i,
             group: "value",
             severity: "FLAGGED_ONLY",
-            detail: `Mã ISBN-13 "${cleanId}" không hợp lệ (sai checksum)`,
+            detail: `Mã ISBN-13 "${cleanId}" không hợp lệ (sai số kiểm tra checksum)`,
           });
         }
       }

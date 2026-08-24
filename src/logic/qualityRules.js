@@ -294,17 +294,18 @@ export function checkStaleData(rows) {
 
 export function checkCategoricalMismatch(rows) {
   const issues = [];
-  const validKenh = ["Shopee", "Lazada", "TikTok Shop", "POS"];
+  const validKenh = ["Shopee", "Lazada", "TikTok Shop", "POS", "FAHASA", "Tiki", "Website"];
   const validStatus = ["Hoàn thành", "Đã hủy", "Đang xử lý", "Trả hàng"];
 
   rows.forEach((row, i) => {
     const normKenh = normalizeChannel(row.kenh);
-    if (normKenh && !validKenh.includes(normKenh)) {
-      issues.push({ rowIndex: i, group: "semantic", severity: "FLAGGED_ONLY", detail: `Kênh bán ${normKenh} không nằm trong danh sách chuẩn` });
+    const isBranchChannel = row._isUnpivoted || (normKenh && (normKenh.toLowerCase().includes("fahasa") || normKenh.toLowerCase().includes("chi nhanh") || normKenh.toLowerCase().includes("ns ")));
+    if (normKenh && !validKenh.includes(normKenh) && !isBranchChannel) {
+      issues.push({ rowIndex: i, group: "semantic", severity: "FLAGGED_ONLY", detail: `Kênh bán "${normKenh}" không nằm trong danh sách chuẩn` });
     }
     const normStatus = normalizeOrderStatus(row.trang_thai);
     if (normStatus && !validStatus.includes(normStatus)) {
-      issues.push({ rowIndex: i, group: "semantic", severity: "FLAGGED_ONLY", detail: `Trạng thái ${normStatus} không nằm trong danh sách chuẩn` });
+      issues.push({ rowIndex: i, group: "semantic", severity: "FLAGGED_ONLY", detail: `Trạng thái "${normStatus}" không nằm trong danh sách chuẩn` });
     }
   });
   return issues;

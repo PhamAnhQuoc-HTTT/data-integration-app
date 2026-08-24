@@ -157,19 +157,20 @@ export function normalizeChannel(value) {
   const original = String(value).trim();
   if (original === "") return null;
   
-  const matchStr = removeDiacritics(original).toLowerCase().replace(/\s+/g, " ").trim();
+  const matchStr = removeDiacritics(original).toLowerCase().replace(/[_\-.]+/g, " ").replace(/\s+/g, " ").trim();
   
   const map = {
     'shopee': 'Shopee',
     'shopee vn': 'Shopee',
-    'shopee.vn': 'Shopee',
+    'shopee mall': 'Shopee',
     'lazada': 'Lazada',
     'lazada vn': 'Lazada',
-    'lazada.vn': 'Lazada',
+    'lazada mall': 'Lazada',
     'tiktok': 'TikTok Shop',
     'tiktok shop': 'TikTok Shop',
     'tik tok': 'TikTok Shop',
-    'tiktok.com': 'TikTok Shop',
+    'tik tok shop': 'TikTok Shop',
+    'tiktokshop': 'TikTok Shop',
     'pos': 'POS',
     'tai quay': 'POS',
     'cua hang': 'POS',
