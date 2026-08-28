@@ -13,22 +13,22 @@ import { normalizeNumber, isValidDate, normalizeChannel, normalizeOrderStatus } 
 const PRICE_DEVIATION_THRESHOLD = 0.3; // lệch > 30% so với giá chuẩn -> gắn cờ
 
 export const GROUP_LABELS = {
-  schema: 'I. Xung đột cấu trúc',
-  entity: 'II. Xung đột định danh',
-  value: 'III. Xung đột giá trị',
-  temporal: 'IV. Xung đột thời gian',
-  semantic: 'V. Xung đột ngữ nghĩa',
-  technical: 'VI. Xung đột kỹ thuật',
-  missing: 'Thiếu dữ liệu',
-  malformed: 'Sai định dạng',
-  duplicate: 'Trùng lặp',
-  inconsistent: 'Không nhất quán',
+  schema: '⚠️ Lỗi Cấu Trúc Dữ Liệu',
+  entity: '🏷️ Lỗi Tên Sản Phẩm / Mã Hàng',
+  value: '💰 Lỗi Giá Trị / Số Tiền',
+  temporal: '📅 Lỗi Ngày Tháng',
+  semantic: '🔍 Lỗi Ý Nghĩa Dữ Liệu',
+  technical: '🔧 Lỗi Kỹ Thuật',
+  missing: '❓ Thiếu Thông Tin',
+  malformed: '✏️ Sai Định Dạng',
+  duplicate: '🔁 Trùng Lặp',
+  inconsistent: '↔️ Không Nhất Quán',
 };
 
 export const SEVERITY_LABELS = {
-  AUTO_FIXED: "Đã tự sửa",
-  NEEDS_CONFIRMATION: "Cần xác nhận",
-  FLAGGED_ONLY: "Chỉ gắn cờ",
+  AUTO_FIXED: "✅ Đã tự sửa",
+  NEEDS_CONFIRMATION: "👆 Cần bạn xem",
+  FLAGGED_ONLY: "🔔 Đã gắn cờ",
 };
 
 // ============================================================================

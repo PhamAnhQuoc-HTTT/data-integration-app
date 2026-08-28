@@ -7,7 +7,10 @@ import {
   UploadCloud, Layers, Package, CheckCircle2, AlertTriangle,
   RotateCcw, Download, BarChart3, Table2, ListChecks, Loader2, ArrowRight, Trash2,
   Settings, ShieldCheck, Check, X, Sliders, FileText,
-  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle
+  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle,
+  ShoppingCart, Banknote, TrendingUp, Bell, Calendar, Tag,
+  MousePointerClick, ThumbsUp, ThumbsDown, BookOpen, Sparkles,
+  ClipboardList, Eye, BadgeCheck, CircleAlert, Layers3,
 } from "lucide-react";
 import { detectFields, FIELD_LABELS } from "./logic/fieldMapping";
 import { runPipeline } from "./logic/pipeline";
@@ -16,7 +19,7 @@ import { SEVERITY_LABELS, GROUP_LABELS } from "./logic/qualityRules";
 /* ============================== DESIGN TOKENS ============================== */
 const Tokens = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
     .bsi-root {
       --ink: #202D24;
       --ink-soft: #4A5148;
@@ -25,11 +28,13 @@ const Tokens = () => (
       --line: rgba(32,45,36,0.14);
       --brass: #A97B25;
       --brass-soft: #E7D3A6;
-      --moss: #4C7458;
-      --moss-soft: #DCE8DE;
-      --brick: #9C4A3B;
-      --brick-soft: #F1D9D2;
+      --moss: #2D7A4A;
+      --moss-soft: #D4EDDE;
+      --brick: #C0392B;
+      --brick-soft: #FADBD8;
       --navy: #2C3E4A;
+      --amber-warn: #E67E22;
+      --amber-warn-soft: #FDEBD0;
       font-family: 'Inter', system-ui, sans-serif;
       background: var(--paper);
       color: var(--ink);
@@ -37,46 +42,88 @@ const Tokens = () => (
     }
     .bsi-serif { font-family: 'Source Serif 4', Georgia, serif; }
     .bsi-mono { font-family: 'IBM Plex Mono', monospace; }
-    .bsi-card { background: var(--paper-card); border: 1px solid var(--line); border-radius: 4px; }
+    .bsi-card { background: var(--paper-card); border: 1px solid var(--line); border-radius: 10px; }
+    .bsi-card-hover { transition: box-shadow .2s ease, transform .15s ease; }
+    .bsi-card-hover:hover { box-shadow: 0 6px 24px rgba(32,45,36,0.10); transform: translateY(-1px); }
     .bsi-tab-label {
       position: absolute; top: -11px; left: 16px;
       background: var(--ink); color: var(--paper-card);
-      font-size: 10.5px; letter-spacing: 0.09em; font-weight: 600;
-      padding: 3px 10px; border-radius: 3px; text-transform: uppercase;
+      font-size: 10.5px; letter-spacing: 0.09em; font-weight: 700;
+      padding: 3px 10px; border-radius: 20px; text-transform: uppercase;
     }
-    .bsi-dropzone { border: 1.5px dashed var(--line); transition: border-color .15s ease, background .15s ease; }
+    .bsi-dropzone { border: 2px dashed var(--line); transition: border-color .15s ease, background .15s ease; border-radius: 10px; }
     .bsi-dropzone:hover, .bsi-dropzone.drag { border-color: var(--brass); background: var(--brass-soft); }
     .bsi-btn-primary {
-      background: var(--ink); color: var(--paper-card); font-weight: 600; border-radius: 4px;
-      transition: opacity .15s ease, transform .1s ease;
+      background: var(--ink); color: var(--paper-card); font-weight: 700; border-radius: 8px;
+      transition: opacity .15s ease, transform .1s ease; letter-spacing: 0.01em;
     }
-    .bsi-btn-primary:hover:not(:disabled) { opacity: 0.85; }
+    .bsi-btn-primary:hover:not(:disabled) { opacity: 0.85; transform: translateY(-1px); }
     .bsi-btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+    .bsi-btn-cta {
+      background: linear-gradient(135deg, #2D7A4A 0%, #1a5c36 100%);
+      color: white; font-weight: 700; border-radius: 10px; font-size: 16px;
+      transition: opacity .15s ease, transform .1s ease, box-shadow .15s ease;
+      box-shadow: 0 4px 14px rgba(45,122,74,0.35);
+    }
+    .bsi-btn-cta:hover:not(:disabled) { opacity: 0.92; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(45,122,74,0.45); }
+    .bsi-btn-cta:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
     .bsi-btn-secondary {
-      background: transparent; color: var(--ink); border: 1px solid var(--line);
-      font-weight: 600; border-radius: 4px; transition: background .15s ease;
+      background: transparent; color: var(--ink); border: 1.5px solid var(--line);
+      font-weight: 600; border-radius: 8px; transition: background .15s ease;
     }
     .bsi-btn-secondary:hover { background: rgba(32,45,36,0.06); }
+    .bsi-btn-success {
+      background: var(--moss); color: white; font-weight: 700; border-radius: 8px;
+      transition: opacity .15s ease, transform .1s ease;
+    }
+    .bsi-btn-success:hover { opacity: 0.88; transform: translateY(-1px); }
+    .bsi-btn-danger {
+      background: var(--brick); color: white; font-weight: 700; border-radius: 8px;
+      transition: opacity .15s ease, transform .1s ease;
+    }
+    .bsi-btn-danger:hover { opacity: 0.88; transform: translateY(-1px); }
     .bsi-badge {
-      display: inline-flex; align-items: center; font-size: 11.5px;
-      padding: 2px 8px; border-radius: 3px; font-weight: 600; white-space: nowrap;
+      display: inline-flex; align-items: center; font-size: 12px;
+      padding: 3px 10px; border-radius: 20px; font-weight: 600; white-space: nowrap; gap: 4px;
     }
     .bsi-stamp {
-      border: 2px solid var(--brick); color: var(--brick);
-      font-family: 'IBM Plex Mono', monospace; font-weight: 700;
-      letter-spacing: 0.14em; padding: 5px 12px; border-radius: 4px;
-      transform: rotate(-4deg); font-size: 11px; animation: bsi-stamp-in .35s ease-out;
+      border: 2.5px solid var(--moss); color: var(--moss);
+      font-family: 'IBM Plex Mono', monospace; font-weight: 800;
+      letter-spacing: 0.14em; padding: 6px 14px; border-radius: 6px;
+      transform: rotate(-3deg); font-size: 12px; animation: bsi-stamp-in .35s ease-out;
     }
-    @keyframes bsi-stamp-in { 0% { opacity: 0; transform: rotate(-4deg) scale(1.6); } 100% { opacity: 1; transform: rotate(-4deg) scale(1); } }
+    @keyframes bsi-stamp-in { 0% { opacity: 0; transform: rotate(-3deg) scale(1.5); } 100% { opacity: 1; transform: rotate(-3deg) scale(1); } }
     .bsi-tab-btn {
-      font-weight: 600; font-size: 13.5px; padding: 9px 4px;
-      border-bottom: 2px solid transparent; color: var(--ink-soft);
+      font-weight: 600; font-size: 14px; padding: 10px 6px;
+      border-bottom: 3px solid transparent; color: var(--ink-soft);
       transition: color .15s ease, border-color .15s ease;
     }
-    .bsi-tab-btn.active { color: var(--ink); border-color: var(--brass); }
-    .bsi-row:hover { background: rgba(32,45,36,0.035); }
+    .bsi-tab-btn.active { color: var(--moss); border-color: var(--moss); }
+    .bsi-row:hover { background: rgba(32,45,36,0.04); }
     .bsi-spin { animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .stat-num { font-size: 2.4rem; font-weight: 800; line-height: 1.1; }
+    .stat-label { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-sub { font-size: 12.5px; margin-top: 4px; }
+    .icon-circle {
+      width: 52px; height: 52px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-badge {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--ink); color: var(--paper-card);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 15px; flex-shrink: 0;
+    }
+    .expert-accordion { background: #f0f4ff; border: 1.5px solid #c5d3f0; border-radius: 8px; }
+    .traffic-green { background: var(--moss-soft); border-color: var(--moss); color: var(--moss); }
+    .traffic-red { background: var(--brick-soft); border-color: var(--brick); color: var(--brick); }
+    .traffic-amber { background: var(--amber-warn-soft); border-color: var(--amber-warn); color: var(--amber-warn); }
+    .issue-icon-cell { font-size: 18px; }
+    .progress-bar-track { height: 10px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+    .progress-bar-fill { height: 10px; border-radius: 99px; transition: width .5s ease; }
+    .step-flow { display: flex; align-items: center; gap: 8px; }
+    .step-flow-arrow { color: #9ca3af; font-size: 20px; }
   `}</style>
 );
 
@@ -84,10 +131,10 @@ function formatVND(n) { return isNaN(n) ? "—" : Math.round(n).toLocaleString("
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 const PROCESSING_STEPS = [
-  "Đang đọc và áp dụng 7 nhóm chuẩn hóa dữ liệu (Mã định danh, Văn bản, Số, Thời gian, Phân loại, Cấu trúc, Encoding)...",
-  "Đang kích hoạt Phương pháp Đối Chiếu Thực Thể Nhiều Tầng (Multi-tier Entity Resolution)...",
-  "Đang kiểm tra chất lượng dữ liệu 6 nhóm lỗi (Cấu trúc, Định danh, Giá trị, Thời gian, Ngữ nghĩa, Kỹ thuật)...",
-  "Đang tổng hợp tập dữ liệu tích hợp và tính toán chỉ số đánh giá RQ1, RQ2, RQ3...",
+  "📖 Đang đọc và làm sạch dữ liệu từ tất cả các file...",
+  "🔗 Đang so sánh và ghép tên sản phẩm từ các nguồn...",
+  "🔍 Đang kiểm tra lỗi và vấn đề trong dữ liệu...",
+  "📊 Đang tổng hợp kết quả và tính doanh thu thực tế...",
 ];
 
 const MAX_ORDER_FILES = 4;
@@ -97,6 +144,7 @@ const PRESETS = {
   balanced: {
     id: "balanced",
     icon: Target,
+    emoji: "⚖️",
     name: "Tiêu Chuẩn (Khuyên dùng)",
     badge: "Cân bằng tối ưu",
     badgeColor: "var(--moss)",
@@ -115,6 +163,7 @@ const PRESETS = {
   strict: {
     id: "strict",
     icon: Shield,
+    emoji: "🛡️",
     name: "Nghiêm Ngặt (Kế toán / Kiểm toán)",
     badge: "Chính xác cao",
     badgeColor: "var(--brick)",
@@ -133,6 +182,7 @@ const PRESETS = {
   relaxed: {
     id: "relaxed",
     icon: Zap,
+    emoji: "⚡",
     name: "Tự Động Tối Đa (Bán lẻ đa sàn)",
     badge: "Nhanh & Tự động",
     badgeColor: "#7A5A15",
@@ -163,60 +213,67 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
   }, [onAddFile, setDragOverKey, full]);
 
   return (
-    <div className="bsi-card relative p-5 pt-6">
-      <span className="bsi-tab-label">Ô 1 (Bắt buộc)</span>
-      <div className="flex items-center gap-2 mb-1">
-        <Layers size={17} style={{ color: "var(--brass)" }} />
-        <h3 className="bsi-serif font-semibold text-[15px]">Tệp Đơn Hàng Các Kênh (Tối thiểu 1 hoặc 2 tệp)</h3>
+    <div className="bsi-card relative p-5 pt-7 bsi-card-hover">
+      <span className="bsi-tab-label">📦 Bước 1 — Bắt buộc</span>
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="icon-circle" style={{ background: "#EBF5FB" }}>
+          <ShoppingCart size={24} style={{ color: "#2471A3" }} />
+        </div>
+        <div>
+          <h3 className="bsi-serif font-semibold text-[17px] leading-tight">Tải lên file Đơn Hàng</h3>
+          <p className="text-[12.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Từ POS, Shopee, Lazada, TikTok Shop, FAHASA…</p>
+        </div>
       </div>
-      <p className="text-[12.5px] mb-3" style={{ color: "var(--ink-soft)" }}>
-        Kéo thả các tệp đơn hàng từ POS tại quầy, các sàn TMĐT (Shopee, Lazada, TikTok Shop) hoặc báo cáo FAHASA.
-      </p>
+      <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "var(--moss-soft)", border: "1px solid var(--moss)" }}>
+        <Info size={14} style={{ color: "var(--moss)", flexShrink: 0 }} />
+        <p className="text-[12px]" style={{ color: "var(--moss)" }}>
+          Hỗ trợ tối đa <strong>{maxFiles} file</strong>. Mỗi file là một kênh bán hàng khác nhau.
+        </p>
+      </div>
       {!full && (
         <>
           <label htmlFor={inputId}
-            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-1.5 rounded py-6 px-3 cursor-pointer text-center`}
+            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-2 py-8 px-3 cursor-pointer text-center`}
             onDragOver={(e) => { e.preventDefault(); setDragOverKey(dragKey); }}
             onDragLeave={() => setDragOverKey(null)} onDrop={handleDrop}>
-            <UploadCloud size={20} style={{ color: "var(--ink-soft)" }} />
-            <span className="text-[12.5px] font-medium">Kéo thả hoặc bấm để chọn tệp đơn hàng</span>
-            <span className="text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>.csv · .xlsx · .xls</span>
+            <UploadCloud size={28} style={{ color: "var(--brass)" }} />
+            <span className="text-[14px] font-semibold">Kéo thả hoặc bấm để chọn file đơn hàng</span>
+            <span className="text-[12px] bsi-mono" style={{ color: "var(--ink-soft)" }}>Định dạng: .csv · .xlsx · .xls</span>
           </label>
           <input id={inputId} type="file" accept=".csv,.xlsx,.xls" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onAddFile(f); e.target.value = ""; }} />
         </>
       )}
       {files.length > 0 && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-2.5">
           {files.map((fileState, i) => (
-            <div key={i} className="rounded p-2.5" style={{ background: "var(--moss-soft)" }}>
+            <div key={i} className="rounded-lg p-3" style={{ background: "var(--moss-soft)", border: "1px solid var(--moss)" }}>
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <CheckCircle2 size={14} style={{ color: "var(--moss)", flexShrink: 0 }} />
-                  <span className="text-[12px] font-medium truncate">{fileState.fileName}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <CheckCircle2 size={18} style={{ color: "var(--moss)", flexShrink: 0 }} />
+                  <span className="text-[13px] font-semibold truncate">{fileState.fileName}</span>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>{fileState.dataRows.length} dòng</span>
-                  <button onClick={() => onRemoveFile(i)} aria-label="Xóa tệp" className="flex items-center">
-                    <Trash2 size={13} style={{ color: "var(--brick)" }} />
+                  <span className="text-[12px] font-medium bsi-mono px-2 py-0.5 rounded" style={{ background: "white", color: "var(--moss)" }}>{fileState.dataRows.length} dòng</span>
+                  <button onClick={() => onRemoveFile(i)} aria-label="Xóa tệp" className="flex items-center p-1 rounded hover:bg-red-100 transition">
+                    <Trash2 size={15} style={{ color: "var(--brick)" }} />
                   </button>
                 </div>
               </div>
-              {/* Ô gắn nhãn Kênh / Sàn bán hàng */}
-              <div className="flex items-center gap-2 mt-2 p-1.5 rounded" style={{ background: "var(--paper)" }}>
-                <span className="text-[11px] font-semibold whitespace-nowrap" style={{ color: "var(--ink-soft)" }}>Kênh bán:</span>
+              <div className="flex items-center gap-2 mt-2 p-2 rounded-lg" style={{ background: "white" }}>
+                <span className="text-[12px] font-semibold whitespace-nowrap" style={{ color: "var(--ink-soft)" }}>🏪 Kênh bán:</span>
                 <input
                   type="text"
                   value={fileState.channelLabel || ""}
                   onChange={(e) => onUpdateChannelLabel(i, e.target.value)}
-                  placeholder="VD: Shopee, TikTok Shop, POS, Lazada…"
-                  className="flex-1 text-[12px] px-2 py-1 rounded border outline-none bg-white"
+                  placeholder="VD: Shopee, TikTok Shop, POS tại quầy…"
+                  className="flex-1 text-[13px] px-2 py-1.5 rounded-lg border outline-none bg-white"
                   style={{ borderColor: "var(--line)" }}
                 />
               </div>
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {Object.entries(fileState.mapping).filter(([k, idx]) => k !== "branchColumns" && idx >= 0).map(([f]) => (
-                  <span key={f} className="bsi-badge" style={{ background: "var(--paper)", color: "var(--ink-soft)" }}>{FIELD_LABELS[f]}</span>
+                  <span key={f} className="bsi-badge" style={{ background: "white", color: "var(--ink-soft)", fontSize: "11px" }}>{FIELD_LABELS[f]}</span>
                 ))}
                 {fileState.mapping.branchColumns && fileState.mapping.branchColumns.length > 0 && (
                   <span className="bsi-badge" style={{ background: "var(--brass-soft)", color: "#7A5A15" }}>
@@ -228,7 +285,7 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
           ))}
         </div>
       )}
-      {full && <p className="text-[11.5px] mt-2" style={{ color: "var(--ink-soft)" }}>Đã đạt tối đa {maxFiles} tệp cho ô này.</p>}
+      {full && <p className="text-[12.5px] mt-2 font-medium" style={{ color: "var(--moss)" }}>✅ Đã đủ {maxFiles} file. Sẵn sàng xử lý!</p>}
     </div>
   );
 }
@@ -243,45 +300,51 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
   }, [onFile, setDragOverKey]);
 
   return (
-    <div className="bsi-card relative p-5 pt-6">
-      <span className="bsi-tab-label">{tag}</span>
-      <div className="flex items-center justify-between gap-2 mb-1">
-        <div className="flex items-center gap-2">
-          <Icon size={17} style={{ color: "var(--brass)" }} />
-          <h3 className="bsi-serif font-semibold text-[15px]">{title}</h3>
+    <div className="bsi-card relative p-5 pt-7 bsi-card-hover">
+      <span className="bsi-tab-label">📋 Bước 2 — Không bắt buộc</span>
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="icon-circle" style={{ background: "#FEF9E7" }}>
+          <Package size={24} style={{ color: "var(--brass)" }} />
         </div>
-        <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Chuẩn mực</span>
+        <div>
+          <h3 className="bsi-serif font-semibold text-[17px] leading-tight">{title}</h3>
+          <span className="bsi-badge mt-1" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Tệp chuẩn mực</span>
+        </div>
       </div>
-      <p className="text-[12.5px] mb-3" style={{ color: "var(--ink-soft)" }}>{hint}</p>
-      
+      <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
+        <Info size={14} style={{ color: "var(--amber-warn)", flexShrink: 0 }} />
+        <p className="text-[12px]" style={{ color: "#7D4E00" }}>
+          {hint}
+        </p>
+      </div>
       {!fileState ? (
         <>
           <label htmlFor={inputId}
-            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-1.5 rounded py-6 px-3 cursor-pointer text-center`}
+            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-2 py-8 px-3 cursor-pointer text-center`}
             onDragOver={(e) => { e.preventDefault(); setDragOverKey(dragKey); }}
             onDragLeave={() => setDragOverKey(null)} onDrop={handleDrop}>
-            <UploadCloud size={20} style={{ color: "var(--ink-soft)" }} />
-            <span className="text-[12.5px] font-medium">Kéo thả tệp Danh Mục Chuẩn (Master Catalog)</span>
-            <span className="text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>.csv · .xlsx · .xls</span>
+            <UploadCloud size={28} style={{ color: "var(--brass)" }} />
+            <span className="text-[14px] font-semibold">Kéo thả hoặc bấm để chọn Danh Sách Sản Phẩm Gốc</span>
+            <span className="text-[12px] bsi-mono" style={{ color: "var(--ink-soft)" }}>Định dạng: .csv · .xlsx · .xls</span>
           </label>
           <input id={inputId} type="file" accept=".csv,.xlsx,.xls" className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
         </>
       ) : (
-        <div className="mt-3 rounded p-2.5" style={{ background: "var(--moss-soft)" }}>
+        <div className="mt-3 rounded-lg p-3" style={{ background: "var(--moss-soft)", border: "1px solid var(--moss)" }}>
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <CheckCircle2 size={14} style={{ color: "var(--moss)", flexShrink: 0 }} />
-              <span className="text-[12px] font-medium truncate">{fileState.fileName}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckCircle2 size={18} style={{ color: "var(--moss)", flexShrink: 0 }} />
+              <span className="text-[13px] font-semibold truncate">{fileState.fileName}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>{fileState.dataRows.length} sản phẩm</span>
-              <button onClick={onRemove} aria-label="Xóa tệp"><Trash2 size={13} style={{ color: "var(--brick)" }} /></button>
+              <span className="text-[12px] font-medium bsi-mono px-2 py-0.5 rounded" style={{ background: "white", color: "var(--moss)" }}>{fileState.dataRows.length} sản phẩm</span>
+              <button onClick={onRemove} aria-label="Xóa tệp" className="p-1 rounded hover:bg-red-100 transition"><Trash2 size={15} style={{ color: "var(--brick)" }} /></button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-1 mt-2">
+          <div className="flex flex-wrap gap-1.5 mt-2">
             {Object.entries(fileState.mapping).filter(([k, i]) => k !== "branchColumns" && i >= 0).map(([f]) => (
-              <span key={f} className="bsi-badge" style={{ background: "var(--paper)", color: "var(--ink-soft)" }}>{FIELD_LABELS[f]}</span>
+              <span key={f} className="bsi-badge" style={{ background: "white", color: "var(--ink-soft)", fontSize: "11px" }}>{FIELD_LABELS[f]}</span>
             ))}
           </div>
         </div>
@@ -290,37 +353,94 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
   );
 }
 
-function StatCard({ label, value, sub, tone = "ink" }) {
-  const colorMap = { ink: "var(--ink)", brass: "var(--brass)", brick: "var(--brick)", moss: "var(--moss)" };
+/* ============================== STAT CARD MỚI (icon + màu traffic light + font lớn) ============================== */
+function StatCard({ label, value, sub, tone = "ink", icon: IconComp, iconBg, iconColor }) {
+  const colorMap = {
+    ink: "var(--ink)",
+    brass: "var(--brass)",
+    brick: "var(--brick)",
+    moss: "var(--moss)",
+    amber: "var(--amber-warn)",
+  };
+  const cardBorderMap = {
+    ink: "var(--line)",
+    brass: "var(--brass)",
+    brick: "var(--brick)",
+    moss: "var(--moss)",
+    amber: "var(--amber-warn)",
+  };
+  const cardBgMap = {
+    ink: "var(--paper-card)",
+    brass: "#FEFBF3",
+    brick: "var(--brick-soft)",
+    moss: "var(--moss-soft)",
+    amber: "var(--amber-warn-soft)",
+  };
   return (
-    <div className="bsi-card p-4">
-      <p className="text-[11.5px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "var(--ink-soft)" }}>{label}</p>
-      <p className="bsi-serif text-2xl font-semibold" style={{ color: colorMap[tone] }}>{value}</p>
-      {sub && <p className="text-[11.5px] mt-1" style={{ color: "var(--ink-soft)" }}>{sub}</p>}
+    <div className="bsi-card bsi-card-hover p-4 flex items-center gap-4" style={{ borderColor: cardBorderMap[tone], background: cardBgMap[tone] }}>
+      {IconComp && (
+        <div className="icon-circle" style={{ background: iconBg || "rgba(32,45,36,0.08)" }}>
+          <IconComp size={26} style={{ color: iconColor || colorMap[tone] }} />
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <p className="stat-label mb-1" style={{ color: colorMap[tone] }}>{label}</p>
+        <p className="stat-num bsi-serif" style={{ color: colorMap[tone] }}>{value}</p>
+        {sub && <p className="stat-sub" style={{ color: "var(--ink-soft)" }}>{sub}</p>}
+      </div>
     </div>
   );
 }
 
 function SeverityBadge({ severity }) {
   const styleMap = {
-    NEEDS_CONFIRMATION: { bg: "var(--brass-soft)", fg: "#7A5A15" },
-    FLAGGED_ONLY: { bg: "var(--brick-soft)", fg: "var(--brick)" },
-    AUTO_FIXED: { bg: "var(--moss-soft)", fg: "var(--moss)" },
+    NEEDS_CONFIRMATION: { bg: "var(--amber-warn-soft)", fg: "var(--amber-warn)", icon: "👆" },
+    FLAGGED_ONLY: { bg: "var(--brick-soft)", fg: "var(--brick)", icon: "🔔" },
+    AUTO_FIXED: { bg: "var(--moss-soft)", fg: "var(--moss)", icon: "✅" },
   };
-  const s = styleMap[severity] || { bg: "rgba(44,62,74,0.12)", fg: "var(--navy)" };
-  return <span className="bsi-badge" style={{ background: s.bg, color: s.fg }}>{SEVERITY_LABELS[severity] || severity}</span>;
+  const s = styleMap[severity] || { bg: "rgba(44,62,74,0.12)", fg: "var(--navy)", icon: "ℹ️" };
+  return (
+    <span className="bsi-badge" style={{ background: s.bg, color: s.fg }}>
+      {s.icon} {SEVERITY_LABELS[severity] || severity}
+    </span>
+  );
 }
 
 function IssueList({ issues }) {
-  if (!issues || issues.length === 0) return <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Sạch</span>;
+  if (!issues || issues.length === 0) return (
+    <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>✅ Sạch</span>
+  );
   return (
     <div className="flex flex-col gap-1">
       {issues.map((iss, i) => (
-        <div key={i} className="flex items-center gap-1.5">
+        <div key={i} className="flex items-start gap-1.5">
           <SeverityBadge severity={iss.severity} />
-          <span className="text-[12px]" style={{ color: "var(--ink-soft)" }}>{iss.detail}</span>
+          <span className="text-[12.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>{iss.detail}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* Tooltip/Accordion dành cho Chuyên Gia */
+function ExpertDetail({ title, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="expert-accordion mt-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-[12.5px] font-semibold text-blue-800"
+      >
+        <span className="flex items-center gap-2">
+          <BookOpen size={14} /> 💡 {title}
+        </span>
+        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+      </button>
+      {open && (
+        <div className="px-4 pb-4 pt-1 text-[12px] text-blue-900 space-y-2 border-t border-blue-200">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -375,7 +495,7 @@ export default function DataIntegrationTool() {
       const fs = await parseToFileState(file);
       setOrderFiles((prev) => (prev.length >= MAX_ORDER_FILES ? prev : [...prev, fs]));
     } catch {
-      setParseError(`Không đọc được tệp "${file.name}". Hãy kiểm tra định dạng (.csv/.xlsx/.xls).`);
+      setParseError(`Không đọc được file "${file.name}". Hãy kiểm tra định dạng (.csv/.xlsx/.xls).`);
     }
   };
   const removeOrderFile = (idx) => setOrderFiles((prev) => prev.filter((_, i) => i !== idx));
@@ -387,7 +507,7 @@ export default function DataIntegrationTool() {
     try {
       setCatalogFile(await parseToFileState(file));
     } catch {
-      setParseError(`Không đọc được tệp "${file.name}". Hãy kiểm tra định dạng (.csv/.xlsx/.xls).`);
+      setParseError(`Không đọc được file "${file.name}". Hãy kiểm tra định dạng (.csv/.xlsx/.xls).`);
     }
   };
 
@@ -487,63 +607,70 @@ export default function DataIntegrationTool() {
     URL.revokeObjectURL(url);
   };
 
-  const CHART_COLORS = ["#A97B25", "#4C7458", "#9C4A3B", "#2C3E4A", "#7A8B76", "#C9A45C"];
+  const CHART_COLORS = ["#A97B25", "#2D7A4A", "#C0392B", "#2C3E4A", "#7A8B76", "#C9A45C"];
   const currentPreviewPreset = hoveredPresetId ? PRESETS[hoveredPresetId] : activePresetId !== "custom" ? PRESETS[activePresetId] : null;
+
+  // Tính tỷ lệ khớp
+  const matchRate = result ? (result.stats.totalRows ? Math.round((result.stats.matchedCount / result.stats.totalRows) * 100) : 0) : 0;
 
   return (
     <div className="bsi-root w-full">
       <Tokens />
       <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* HEADER */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--brass)" }}>
-              Khóa Luận Tốt Nghiệp · ĐH Công Nghệ Thông Tin (UIT — ĐHQG TP.HCM)
+              🎓 Khóa Luận Tốt Nghiệp · ĐH Công Nghệ Thông Tin (UIT — ĐHQG TP.HCM)
             </p>
-            <h1 className="bsi-serif text-[24px] md:text-[26px] font-semibold leading-tight">
-              Hệ Thống Tích Hợp & Kiểm Soát Chất Lượng Dữ Liệu Bán Hàng Đa Nguồn
+            <h1 className="bsi-serif text-[24px] md:text-[28px] font-semibold leading-tight">
+              🛒 Hệ Thống Kiểm Tra & Tổng Hợp Dữ Liệu Bán Hàng Đa Kênh
             </h1>
-            <p className="text-[12px] text-gray-600 mt-0.5 bsi-mono">
+            <p className="text-[12px] text-gray-500 mt-0.5 bsi-mono">
               Multi-source Sales Data Integration and Data Quality Management System
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowConfigModal(true)} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-3.5 py-2">
-              <Sliders size={14} /> Gói cấu hình: <span className="font-bold text-amber-900">{activePresetId !== "custom" ? PRESETS[activePresetId].name.split("(")[0].trim() : "Tùy chỉnh"}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => setShowConfigModal(true)} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-4 py-2.5">
+              <Settings size={15} />
+              <span>Cấu hình:</span>
+              <span className="font-bold" style={{ color: "var(--brass)" }}>
+                {activePresetId !== "custom" ? PRESETS[activePresetId].emoji + " " + PRESETS[activePresetId].name.split("(")[0].trim() : "⚙️ Tùy chỉnh"}
+              </span>
             </button>
             {step === "results" && (
               <>
-                <button onClick={exportSummaryFile} className="bsi-btn-primary flex items-center gap-1.5 text-[13px] px-3.5 py-2">
-                  <Download size={14} /> Xuất dữ liệu tích hợp
+                <button onClick={exportSummaryFile} className="bsi-btn-cta flex items-center gap-2 px-4 py-2.5">
+                  <Download size={16} /> ⬇️ Tải Xuống File Kết Quả
                 </button>
-                <button onClick={reset} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-3.5 py-2">
-                  <RotateCcw size={14} /> Tích hợp tệp khác
+                <button onClick={reset} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-4 py-2.5">
+                  <RotateCcw size={14} /> Kiểm tra file khác
                 </button>
               </>
             )}
           </div>
         </div>
 
-        {/* Modal Cấu hình xử lý trực quan theo 3 Gói Nghiệp Vụ */}
+        {/* Modal Cấu hình */}
         {showConfigModal && (
-          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
             <div className="bsi-card max-w-xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto" style={{ background: "var(--paper-card)" }}>
               <div className="flex items-center justify-between mb-4 border-b pb-3" style={{ borderColor: "var(--line)" }}>
                 <div className="flex items-center gap-2">
-                  <Sliders size={18} style={{ color: "var(--brass)" }} />
+                  <Sliders size={20} style={{ color: "var(--brass)" }} />
                   <div>
-                    <h3 className="bsi-serif text-lg font-semibold leading-none">Cấu Hình Xử Lý Dữ Liệu Trực Quan</h3>
-                    <p className="text-[11.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Lựa chọn gói quy tắc phù hợp với mục đích kinh doanh của bạn</p>
+                    <h3 className="bsi-serif text-xl font-semibold leading-none">⚙️ Chọn Mức Độ Kiểm Tra</h3>
+                    <p className="text-[12px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Chọn gói phù hợp với mục đích sử dụng của bạn</p>
                   </div>
                 </div>
-                <button onClick={() => setShowConfigModal(false)} aria-label="Đóng"><X size={18} /></button>
+                <button onClick={() => setShowConfigModal(false)} aria-label="Đóng" className="p-1.5 rounded-lg hover:bg-gray-100 transition"><X size={20} /></button>
               </div>
 
-              {/* 3 Gói Cấu Hình Định Sẵn */}
+              {/* 3 Gói Cấu Hình */}
               <div className="space-y-2.5 mb-4">
-                <p className="text-[12px] font-semibold uppercase tracking-wider text-gray-500">1. Chọn Gói Cấu Hình Theo Nhu Cầu</p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                <p className="text-[13px] font-semibold text-gray-600 mb-2">1. Chọn Gói Kiểm Tra Phù Hợp:</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {Object.entries(PRESETS).map(([key, p]) => {
-                    const IconComponent = p.icon;
                     const isSelected = activePresetId === key;
                     return (
                       <div
@@ -551,183 +678,216 @@ export default function DataIntegrationTool() {
                         onClick={() => handleSelectPreset(key)}
                         onMouseEnter={() => setHoveredPresetId(key)}
                         onMouseLeave={() => setHoveredPresetId(null)}
-                        className={`p-3 rounded border cursor-pointer transition relative flex flex-col justify-between ${
-                          isSelected ? "border-amber-700 bg-amber-50 shadow-sm" : "border-gray-200 hover:border-amber-400 bg-white"
+                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
+                          isSelected ? "border-green-600 bg-green-50 shadow-md" : "border-gray-200 hover:border-amber-400 bg-white"
                         }`}
                       >
                         <div>
-                          <div className="flex items-center justify-between mb-1.5">
-                            <IconComponent size={16} style={{ color: isSelected ? "var(--brass)" : "var(--ink-soft)" }} />
-                            <span className="text-[10.5px] px-1.5 py-0.5 rounded font-semibold" style={{ background: p.badgeBg, color: p.badgeColor }}>
-                              {p.badge}
-                            </span>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-2xl">{p.emoji}</span>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: p.badgeBg, color: p.badgeColor }}>{p.badge}</span>
                           </div>
-                          <h4 className="font-semibold text-[12.5px] mb-1 leading-tight">{p.name.split("(")[0]}</h4>
-                          <p className="text-[11px] text-gray-600 line-clamp-2">{p.shortDesc}</p>
+                          <h4 className="font-bold text-[13px] mb-1 leading-tight">{p.name.split("(")[0]}</h4>
+                          <p className="text-[11.5px] text-gray-600 leading-relaxed">{p.shortDesc}</p>
                         </div>
-                        <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-between text-[10.5px] text-gray-500">
-                          <span>Rê chuột để xem</span>
-                          <HelpCircle size={12} />
-                        </div>
+                        {isSelected && (
+                          <div className="mt-2 flex items-center gap-1 text-green-700 text-[11.5px] font-semibold">
+                            <CheckCircle2 size={13} /> Đang sử dụng
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Khung Chi Tiết & Mô Tả Khi Hover */}
+              {/* Chi tiết gói khi hover */}
               {currentPreviewPreset && (
-                <div className="p-3.5 rounded border mb-4 text-[12px] transition-all" style={{ background: "var(--paper)", borderColor: "var(--brass)" }}>
-                  <div className="flex items-center gap-1.5 font-semibold text-amber-900 mb-1">
-                    <Info size={14} /> Chi tiết gói: {currentPreviewPreset.name}
+                <div className="p-4 rounded-xl border mb-4 text-[12.5px] transition-all" style={{ background: "var(--paper)", borderColor: "var(--brass)" }}>
+                  <div className="flex items-center gap-1.5 font-bold text-amber-900 mb-2">
+                    <Info size={15} /> {currentPreviewPreset.emoji} Chi tiết: {currentPreviewPreset.name}
                   </div>
                   <p className="text-gray-700 leading-relaxed mb-2">{currentPreviewPreset.detail}</p>
-                  <div className="text-[11.5px] text-gray-600 bg-white/70 p-2 rounded border border-gray-200">
+                  <div className="text-[12px] text-gray-600 bg-white/80 p-2.5 rounded-lg border border-gray-200">
                     <strong>🎯 Phù hợp nhất cho:</strong> {currentPreviewPreset.suitableFor}
                   </div>
                 </div>
               )}
 
-              {/* Phần Cấu Hình Nâng Cao (Thu gọn) */}
+              {/* Cấu hình nâng cao (ẩn cho chuyên gia) */}
               <div className="border-t pt-3 mb-2" style={{ borderColor: "var(--line)" }}>
                 <button
                   onClick={() => setShowAdvancedParams(!showAdvancedParams)}
-                  className="flex items-center justify-between w-full text-[12.5px] font-semibold text-gray-700 hover:text-amber-800"
+                  className="flex items-center justify-between w-full text-[12.5px] font-semibold text-blue-800 bg-blue-50 px-4 py-2.5 rounded-lg hover:bg-blue-100 transition"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Settings size={14} /> 2. Tùy Chỉnh Tham Số Chuyên Sâu (Dành Cho Kỹ Thuật)
+                  <span className="flex items-center gap-2">
+                    <BookOpen size={15} /> 💡 Tùy Chỉnh Tham Số Kỹ Thuật (Dành Cho Chuyên Gia)
                   </span>
                   {showAdvancedParams ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
 
                 {showAdvancedParams && (
-                  <div className="mt-3.5 space-y-3.5 bg-white p-3.5 rounded border border-gray-200 text-[12px]">
+                  <div className="mt-3 space-y-4 bg-blue-50 p-4 rounded-xl border border-blue-200 text-[12.5px]">
                     <div>
-                      <div className="flex justify-between font-semibold mb-1">
-                        <span>Ngưỡng đối chiếu mờ (Fuzzy Confirm): {config.fuzzyConfirmThreshold}%</span>
-                        <span className="text-gray-500 text-[11px]">Mặc định: 70%</span>
+                      <div className="flex justify-between font-semibold mb-1.5">
+                        <span>Ngưỡng độ giống cần xác nhận thủ công: <strong className="text-blue-800">{config.fuzzyConfirmThreshold}%</strong></span>
+                        <span className="text-gray-400 text-[11px]">Mặc định: 70%</span>
                       </div>
-                      <input
-                        type="range"
-                        min="40"
-                        max="90"
-                        value={config.fuzzyConfirmThreshold}
+                      <input type="range" min="40" max="90" value={config.fuzzyConfirmThreshold}
                         onChange={(e) => handleCustomParamChange("fuzzyConfirmThreshold", Number(e.target.value))}
-                        className="w-full"
-                      />
-                      <span className="text-[11px] text-gray-500 block mt-0.5">
-                        Điểm từ {config.fuzzyConfirmThreshold}% trở lên sẽ được chuyển sang danh sách Cần xác nhận thủ công.
-                      </span>
+                        className="w-full accent-blue-600" />
+                      <span className="text-[11px] text-gray-500 mt-0.5 block">Sản phẩm có độ giống từ {config.fuzzyConfirmThreshold}% trở lên sẽ chuyển sang danh sách cần bạn xem xét.</span>
                     </div>
-
                     <div>
-                      <div className="flex justify-between font-semibold mb-1">
-                        <span>Ngưỡng khớp chắc chắn (Fuzzy High): {config.fuzzyHighThreshold}%</span>
-                        <span className="text-gray-500 text-[11px]">Mặc định: 90%</span>
+                      <div className="flex justify-between font-semibold mb-1.5">
+                        <span>Ngưỡng tự động ghép chắc chắn: <strong className="text-blue-800">{config.fuzzyHighThreshold}%</strong></span>
+                        <span className="text-gray-400 text-[11px]">Mặc định: 90%</span>
                       </div>
-                      <input
-                        type="range"
-                        min="75"
-                        max="99"
-                        value={config.fuzzyHighThreshold}
+                      <input type="range" min="75" max="99" value={config.fuzzyHighThreshold}
                         onChange={(e) => handleCustomParamChange("fuzzyHighThreshold", Number(e.target.value))}
-                        className="w-full"
-                      />
-                      <span className="text-[11px] text-gray-500 block mt-0.5">
-                        Điểm từ {config.fuzzyHighThreshold}% trở lên được tự động chấp nhận khớp.
-                      </span>
+                        className="w-full accent-blue-600" />
+                      <span className="text-[11px] text-gray-500 mt-0.5 block">Từ {config.fuzzyHighThreshold}% trở lên hệ thống tự động ghép mà không cần xác nhận.</span>
                     </div>
-
                     <div>
-                      <div className="flex justify-between font-semibold mb-1">
-                        <span>Ngưỡng cảnh báo lệch giá: {config.priceDeviationThreshold}%</span>
-                        <span className="text-gray-500 text-[11px]">Mặc định: 30%</span>
+                      <div className="flex justify-between font-semibold mb-1.5">
+                        <span>Ngưỡng cảnh báo lệch giá: <strong className="text-blue-800">{config.priceDeviationThreshold}%</strong></span>
+                        <span className="text-gray-400 text-[11px]">Mặc định: 30%</span>
                       </div>
-                      <input
-                        type="range"
-                        min="10"
-                        max="60"
-                        value={config.priceDeviationThreshold}
+                      <input type="range" min="10" max="60" value={config.priceDeviationThreshold}
                         onChange={(e) => handleCustomParamChange("priceDeviationThreshold", Number(e.target.value))}
-                        className="w-full"
-                      />
-                      <span className="text-[11px] text-gray-500 block mt-0.5">
-                        Gắn cờ cảnh báo khi giá bán lệch quá {config.priceDeviationThreshold}% so với giá chuẩn catalog.
-                      </span>
+                        className="w-full accent-blue-600" />
+                      <span className="text-[11px] text-gray-500 mt-0.5 block">Gắn cờ cảnh báo khi giá lệch quá {config.priceDeviationThreshold}% so với giá trong danh mục sản phẩm gốc.</span>
                     </div>
                   </div>
                 )}
               </div>
 
               <div className="mt-5 flex justify-end gap-2">
-                <button onClick={() => setShowConfigModal(false)} className="bsi-btn-primary px-5 py-2 text-[13px]">
-                  Áp dụng cấu hình
+                <button onClick={() => setShowConfigModal(false)} className="bsi-btn-secondary px-4 py-2 text-[13px]">Hủy</button>
+                <button onClick={() => setShowConfigModal(false)} className="bsi-btn-cta px-6 py-2.5 text-[14px]">
+                  <Check size={15} className="inline mr-1" /> Áp dụng cấu hình
                 </button>
               </div>
             </div>
           </div>
         )}
 
+        {/* STEP: UPLOAD */}
         {step === "upload" && (
           <>
-            <p className="text-[13.5px] mb-5 max-w-2xl" style={{ color: "var(--ink-soft)" }}>
-              Hệ thống thực hiện ánh xạ, chuẩn hóa theo 7 nhóm đối tượng, đối chiếu thực thể 3 tầng và kiểm soát 6 nhóm lỗi chất lượng dữ liệu để tạo dataset tích hợp phục vụ báo cáo quản trị.
-            </p>
+            {/* Hướng dẫn nhanh */}
+            <div className="bsi-card p-5 mb-6" style={{ background: "linear-gradient(135deg, #EBF5FB 0%, #E8F8F5 100%)", borderColor: "#AED6F1" }}>
+              <h2 className="font-bold text-[16px] mb-3 flex items-center gap-2">
+                <Sparkles size={18} style={{ color: "#2471A3" }} />
+                Hướng Dẫn Sử Dụng Nhanh
+              </h2>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="step-badge bg-blue-600 text-white">1</div>
+                  <div>
+                    <p className="font-semibold text-[14px]">📦 Tải file đơn hàng</p>
+                    <p className="text-[12.5px] text-gray-600 mt-0.5">Từ POS, Shopee, TikTok Shop, Lazada…</p>
+                  </div>
+                </div>
+                <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="step-badge" style={{ background: "var(--brass)" }}>2</div>
+                  <div>
+                    <p className="font-semibold text-[14px]">📋 Tải danh sách sản phẩm gốc</p>
+                    <p className="text-[12.5px] text-gray-600 mt-0.5">Không bắt buộc — giúp kết quả chính xác hơn</p>
+                  </div>
+                </div>
+                <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="step-badge" style={{ background: "var(--moss)" }}>3</div>
+                  <div>
+                    <p className="font-semibold text-[14px]">🚀 Bấm Kiểm Tra</p>
+                    <p className="text-[12.5px] text-gray-600 mt-0.5">Hệ thống tự động làm mọi thứ!</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {parseError && (
-              <div className="bsi-card p-3 mb-4 flex items-center gap-2" style={{ borderColor: "var(--brick)", background: "var(--brick-soft)" }}>
-                <AlertTriangle size={15} style={{ color: "var(--brick)" }} />
-                <span className="text-[12.5px]" style={{ color: "var(--brick)" }}>{parseError}</span>
+              <div className="bsi-card p-4 mb-4 flex items-center gap-3" style={{ borderColor: "var(--brick)", background: "var(--brick-soft)" }}>
+                <AlertTriangle size={18} style={{ color: "var(--brick)", flexShrink: 0 }} />
+                <div>
+                  <p className="font-semibold text-[13px]" style={{ color: "var(--brick)" }}>⚠️ Không đọc được file!</p>
+                  <span className="text-[12.5px]" style={{ color: "var(--brick)" }}>{parseError}</span>
+                </div>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
               <OrdersDropzone files={orderFiles} onAddFile={addOrderFile} onRemoveFile={removeOrderFile}
                 onUpdateChannelLabel={updateChannelLabel}
                 maxFiles={MAX_ORDER_FILES} dragKey="orders" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
-              <UploadCard tag="Ô 2 (Danh mục chuẩn)" icon={Package} title="Danh mục sản phẩm chuẩn (Master Catalog)"
-                hint="Tệp danh mục chuẩn làm cơ sở đối chiếu thực thể 3 tầng (Mã chuẩn -> Crosswalk -> Fuzzy Token-Sort) và kiểm soát chất lượng."
+              <UploadCard tag="catalog" icon={Package} title="Danh Sách Sản Phẩm Gốc"
+                hint="Tải lên file danh sách sản phẩm của cửa hàng bạn để hệ thống so sánh và phát hiện lỗi chính xác hơn. Nếu không có, hệ thống vẫn hoạt động bình thường."
                 fileState={catalogFile} onFile={setCatalog} onRemove={() => setCatalogFile(null)}
                 dragKey="catalog" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
             </div>
 
-            <div className="flex items-center justify-end flex-wrap gap-3">
-              <button onClick={processAll} disabled={!readyToProcess} className="bsi-btn-primary flex items-center gap-2 text-[14px] px-5 py-2.5">
-                Bắt đầu tích hợp dữ liệu <ArrowRight size={15} />
+            <div className="flex flex-col items-center gap-3">
+              {!readyToProcess && (
+                <p className="text-[13px] text-gray-500">👆 Hãy tải lên ít nhất 1 file đơn hàng để bắt đầu</p>
+              )}
+              <button onClick={processAll} disabled={!readyToProcess} className="bsi-btn-cta flex items-center gap-3 px-8 py-4 text-[17px]">
+                🚀 Bắt Đầu Kiểm Tra & Tổng Hợp Dữ Liệu
+                <ArrowRight size={20} />
               </button>
+              {readyToProcess && (
+                <p className="text-[12.5px] font-medium" style={{ color: "var(--moss)" }}>
+                  ✅ Sẵn sàng! Đã tải {orderFiles.length} file đơn hàng{catalogFile ? " + 1 danh sách sản phẩm" : ""}.
+                </p>
+              )}
             </div>
           </>
         )}
 
+        {/* STEP: PROCESSING */}
         {step === "processing" && (
-          <div className="bsi-card p-10 flex flex-col items-center text-center">
-            <Loader2 size={30} className="bsi-spin mb-4" style={{ color: "var(--brass)" }} />
-            <h2 className="bsi-serif text-lg font-semibold mb-5">Đang tích hợp & kiểm soát chất lượng…</h2>
-            <div className="w-full max-w-sm space-y-2.5 text-left">
+          <div className="bsi-card p-12 flex flex-col items-center text-center">
+            <div className="relative mb-6">
+              <Loader2 size={52} className="bsi-spin" style={{ color: "var(--moss)" }} />
+            </div>
+            <h2 className="bsi-serif text-[22px] font-semibold mb-2">Đang kiểm tra dữ liệu của bạn…</h2>
+            <p className="text-[13.5px] mb-8 text-gray-500">Vui lòng chờ, hệ thống đang làm việc chăm chỉ 🤖</p>
+            <div className="w-full max-w-md space-y-4 text-left">
               {PROCESSING_STEPS.map((s, i) => (
-                <div key={i} className="flex items-center gap-2.5">
-                  {i < procIdx ? <CheckCircle2 size={16} style={{ color: "var(--moss)" }} />
-                    : i === procIdx ? <Loader2 size={16} className="bsi-spin" style={{ color: "var(--brass)" }} />
-                    : <div className="w-4 h-4 rounded-full border" style={{ borderColor: "var(--line)" }} />}
-                  <span className="text-[13px]" style={{ color: i <= procIdx ? "var(--ink)" : "var(--ink-soft)" }}>{s}</span>
+                <div key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{
+                  background: i < procIdx ? "var(--moss-soft)" : i === procIdx ? "var(--amber-warn-soft)" : "rgba(32,45,36,0.04)",
+                  border: `1.5px solid ${i < procIdx ? "var(--moss)" : i === procIdx ? "var(--amber-warn)" : "transparent"}`
+                }}>
+                  {i < procIdx ? <CheckCircle2 size={20} style={{ color: "var(--moss)", flexShrink: 0 }} />
+                    : i === procIdx ? <Loader2 size={20} className="bsi-spin" style={{ color: "var(--amber-warn)", flexShrink: 0 }} />
+                    : <div className="w-5 h-5 rounded-full border-2 flex-shrink-0" style={{ borderColor: "var(--line)" }} />}
+                  <span className="text-[14px] font-medium" style={{ color: i <= procIdx ? "var(--ink)" : "var(--ink-soft)" }}>{s}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
+        {/* STEP: RESULTS */}
         {step === "results" && result && (
           <div>
-            <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-              <div className="flex items-center gap-3">
-                <span className="bsi-stamp">✓ ĐÃ TÍCH HỢP</span>
-                <span className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
-                  {result.stats.totalRows} giao dịch từ {orderFiles.length} nguồn · {result.stats.catalogSize} sản phẩm trong danh mục chuẩn
-                </span>
+            {/* Banner kết quả */}
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-3 p-4 rounded-xl" style={{ background: "var(--moss-soft)", border: "2px solid var(--moss)" }}>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="bsi-stamp">✓ ĐÃ KIỂM TRA XONG</span>
+                <div>
+                  <p className="font-semibold text-[14px]" style={{ color: "var(--moss)" }}>
+                    {result.stats.totalRows} đơn hàng từ {orderFiles.length} nguồn
+                  </p>
+                  <p className="text-[12px]" style={{ color: "var(--ink-soft)" }}>
+                    {result.stats.catalogSize > 0 ? `${result.stats.catalogSize} sản phẩm trong danh sách gốc` : "Không có danh sách sản phẩm gốc"}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>
-                  Gói: {result.activePreset}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="bsi-badge" style={{ background: "white", color: "var(--moss)" }}>
+                  {activePresetId !== "custom" ? PRESETS[activePresetId].emoji + " " + PRESETS[activePresetId].name.split("(")[0].trim() : "⚙️ Tùy chỉnh"}
                 </span>
                 <span className="bsi-badge" style={{ background: "var(--navy)", color: "#fff" }}>
                   {result.strategyLabel}
@@ -735,94 +895,140 @@ export default function DataIntegrationTool() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <StatCard label="Tổng giao dịch" value={result.stats.totalRows} sub={result.fileBreakdown} />
-              <StatCard label="Tỷ lệ liên kết thực thể (RQ2)" value={`${result.stats.totalRows ? ((result.stats.matchedCount / result.stats.totalRows) * 100).toFixed(0) : 0}%`}
-                sub={`${result.stats.matchedCount}/${result.stats.totalRows} dòng`} tone="moss" />
-              <StatCard label="Vấn đề phát hiện (6 nhóm)" value={result.issues.length} sub="xem chi tiết ở tab Vấn đề" tone="brick" />
-              <StatCard label="Doanh thu thực tế (RQ3)" value={formatVND(result.revenueTotal)} sub={`đã tích hợp ${orderFiles.length} kênh`} tone="brass" />
+            {/* 4 STAT CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <StatCard
+                label="🛒 Tổng Đơn Hàng"
+                value={result.stats.totalRows.toLocaleString()}
+                sub={`Từ ${orderFiles.length} kênh bán hàng`}
+                tone="ink"
+                icon={ShoppingCart}
+                iconBg="#EBF5FB"
+                iconColor="#2471A3"
+              />
+              <StatCard
+                label="✅ Đã Ghép Thành Công"
+                value={`${matchRate}%`}
+                sub={`${result.stats.matchedCount}/${result.stats.totalRows} đơn hàng`}
+                tone="moss"
+                icon={BadgeCheck}
+                iconBg="var(--moss-soft)"
+                iconColor="var(--moss)"
+              />
+              <StatCard
+                label="⚠️ Vấn Đề Phát Hiện"
+                value={result.issues.length}
+                sub={result.issues.length === 0 ? "Tuyệt vời! Không có lỗi 🎉" : "Xem chi tiết ở tab bên dưới"}
+                tone={result.issues.length === 0 ? "moss" : "brick"}
+                icon={result.issues.length === 0 ? ShieldCheck : CircleAlert}
+                iconBg={result.issues.length === 0 ? "var(--moss-soft)" : "var(--brick-soft)"}
+                iconColor={result.issues.length === 0 ? "var(--moss)" : "var(--brick)"}
+              />
+              <StatCard
+                label="💰 Doanh Thu Thực Tế"
+                value={formatVND(result.revenueTotal)}
+                sub={`Tổng hợp từ ${orderFiles.length} kênh`}
+                tone="brass"
+                icon={Banknote}
+                iconBg="#FEF9E7"
+                iconColor="var(--brass)"
+              />
             </div>
 
-            <div className="flex items-center gap-6 border-b mb-5 overflow-x-auto" style={{ borderColor: "var(--line)" }}>
+            {/* TABS */}
+            <div className="flex items-center gap-1 border-b mb-5 overflow-x-auto" style={{ borderColor: "var(--line)" }}>
               {[
-                { key: "overview", label: "Tổng quan", icon: BarChart3 },
-                { key: "issues", label: `Vấn đề dữ liệu (${result.issues.length})`, icon: ListChecks },
-                { key: "manual_confirm", label: `Xác nhận thủ công (${result.pendingConfirmations.length})`, icon: ShieldCheck },
-                { key: "quality_report", label: "Báo cáo chất lượng (RQ1-3)", icon: FileText },
-                { key: "data", label: "Dữ liệu tích hợp", icon: Table2 },
+                { key: "overview", label: "📊 Tổng Quan", icon: BarChart3 },
+                { key: "issues", label: `⚠️ Kiểm Tra Lỗi (${result.issues.length})`, icon: ListChecks },
+                { key: "manual_confirm", label: `👆 Cần Bạn Xem (${result.pendingConfirmations.length})`, icon: ShieldCheck },
+                { key: "quality_report", label: "📋 Báo Cáo Chi Tiết", icon: FileText },
+                { key: "data", label: "📄 Xem Toàn Bộ Dữ Liệu", icon: Table2 },
               ].map((t) => (
-                <button key={t.key} onClick={() => setActiveTab(t.key)} className={`bsi-tab-btn flex items-center gap-1.5 whitespace-nowrap ${activeTab === t.key ? "active" : ""}`}>
-                  <t.icon size={14} /> {t.label}
+                <button key={t.key} onClick={() => setActiveTab(t.key)}
+                  className={`bsi-tab-btn flex items-center gap-1.5 whitespace-nowrap px-3 ${activeTab === t.key ? "active" : ""}`}>
+                  {t.label}
                 </button>
               ))}
             </div>
 
-            {/* TAB 1: TỔNG QUAN QUẢN TRỊ */}
+            {/* TAB 1: TỔNG QUAN */}
             {activeTab === "overview" && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="bsi-card p-4">
-                  <h3 className="bsi-serif text-[14.5px] font-semibold mb-3">Doanh thu phân bổ theo kênh bán hàng</h3>
-                  <ResponsiveContainer width="100%" height={230}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div className="bsi-card p-5">
+                  <h3 className="bsi-serif text-[16px] font-semibold mb-4 flex items-center gap-2">
+                    <TrendingUp size={18} style={{ color: "var(--moss)" }} />
+                    Doanh Thu Theo Kênh Bán Hàng
+                  </h3>
+                  <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={result.revenueByChannel} margin={{ left: 4, right: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
-                      <XAxis dataKey="kenh" tick={{ fontSize: 11 }} stroke="var(--ink-soft)" />
-                      <YAxis tick={{ fontSize: 10 }} stroke="var(--ink-soft)" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v) => formatVND(v)} contentStyle={{ fontSize: 12, borderRadius: 4, borderColor: "var(--line)" }} />
-                      <Bar dataKey="doanhThu" radius={[3, 3, 0, 0]}>
+                      <XAxis dataKey="kenh" tick={{ fontSize: 12 }} stroke="var(--ink-soft)" />
+                      <YAxis tick={{ fontSize: 11 }} stroke="var(--ink-soft)" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v) => formatVND(v)} contentStyle={{ fontSize: 13, borderRadius: 8, borderColor: "var(--line)" }} />
+                      <Bar dataKey="doanhThu" radius={[5, 5, 0, 0]}>
                         {result.revenueByChannel.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="bsi-card p-4">
-                  <h3 className="bsi-serif text-[14.5px] font-semibold mb-3">Top sản phẩm bán chạy nhất (theo số lượng)</h3>
-                  <ResponsiveContainer width="100%" height={230}>
+                <div className="bsi-card p-5">
+                  <h3 className="bsi-serif text-[16px] font-semibold mb-4 flex items-center gap-2">
+                    <ShoppingCart size={18} style={{ color: "var(--brass)" }} />
+                    Top Sản Phẩm Bán Chạy Nhất
+                  </h3>
+                  <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={result.topProducts} layout="vertical" margin={{ left: 4, right: 16 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" horizontal={false} />
-                      <XAxis type="number" tick={{ fontSize: 10 }} stroke="var(--ink-soft)" allowDecimals={false} />
-                      <YAxis type="category" dataKey="ten" width={150} tick={{ fontSize: 10.5 }} stroke="var(--ink-soft)" />
-                      <Tooltip contentStyle={{ fontSize: 12, borderRadius: 4, borderColor: "var(--line)" }} />
-                      <Bar dataKey="soLuong" radius={[0, 3, 3, 0]} fill="var(--brass)" />
+                      <XAxis type="number" tick={{ fontSize: 11 }} stroke="var(--ink-soft)" allowDecimals={false} />
+                      <YAxis type="category" dataKey="ten" width={160} tick={{ fontSize: 11 }} stroke="var(--ink-soft)" />
+                      <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8, borderColor: "var(--line)" }} />
+                      <Bar dataKey="soLuong" radius={[0, 5, 5, 0]} fill="var(--brass)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             )}
 
-            {/* TAB 2: VẤN ĐỀ CHẤT LƯỢNG (6 NHÓM LỖI) */}
+            {/* TAB 2: KIỂM TRA LỖI */}
             {activeTab === "issues" && (
               <div className="bsi-card overflow-hidden">
-                <div className="p-3 text-[12px] flex flex-wrap gap-3" style={{ borderBottom: "1px solid var(--line)", color: "var(--ink-soft)" }}>
-                  <span><SeverityBadge severity="AUTO_FIXED" /> đã tự sửa (chắc chắn 100%)</span>
-                  <span><SeverityBadge severity="NEEDS_CONFIRMATION" /> có đề xuất, cần bạn xác nhận</span>
-                  <span><SeverityBadge severity="FLAGGED_ONLY" /> chỉ gắn cờ, hệ thống không tự đoán</span>
+                {/* Chú thích màu sắc */}
+                <div className="p-4 flex flex-wrap gap-3 text-[12.5px]" style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>
+                  <span className="font-semibold text-gray-600">Ý nghĩa màu sắc:</span>
+                  <span><SeverityBadge severity="AUTO_FIXED" /> — Hệ thống đã tự sửa, bạn không cần làm gì</span>
+                  <span><SeverityBadge severity="NEEDS_CONFIRMATION" /> — Có gợi ý sửa, cần bạn xem xét</span>
+                  <span><SeverityBadge severity="FLAGGED_ONLY" /> — Đã đánh dấu, cần bạn quyết định</span>
                 </div>
                 {result.issues.length === 0 ? (
-                  <p className="p-6 text-center text-[13px]" style={{ color: "var(--ink-soft)" }}>Không phát hiện lỗi nào 🎉</p>
+                  <div className="p-10 text-center">
+                    <div className="text-5xl mb-3">🎉</div>
+                    <p className="text-[16px] font-semibold" style={{ color: "var(--moss)" }}>Tuyệt vời! Không phát hiện lỗi nào!</p>
+                    <p className="text-[13px] mt-1 text-gray-500">Dữ liệu của bạn hoàn toàn sạch và nhất quán.</p>
+                  </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[12.5px]">
+                    <table className="w-full text-[13px]">
                       <thead>
-                        <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                          {["Nguồn", "Mã đơn", "Tên sản phẩm", "Nhóm lỗi (6 nhóm)", "Vấn đề phát hiện"].map((h) => (
-                            <th key={h} className="text-left font-semibold px-4 py-2.5 uppercase tracking-wide text-[10.5px]" style={{ color: "var(--ink-soft)" }}>{h}</th>
+                        <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>
+                          {["Nguồn File", "Mã Đơn", "Tên Sản Phẩm", "Loại Lỗi", "Chi Tiết Vấn Đề"].map((h) => (
+                            <th key={h} className="text-left font-bold px-4 py-3 uppercase tracking-wide text-[11px]" style={{ color: "var(--ink-soft)" }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {result.integrated.filter((r) => r.issues.length > 0).map((r, i) => (
                           <tr key={i} className="bsi-row" style={{ borderBottom: "1px solid var(--line)" }}>
-                            <td className="px-4 py-2.5 whitespace-nowrap align-top">{r.nguon}</td>
-                            <td className="px-4 py-2.5 bsi-mono whitespace-nowrap align-top">{r.ma_don || "—"}</td>
-                            <td className="px-4 py-2.5 align-top">{r.ten_sp || "—"}</td>
-                            <td className="px-4 py-2.5 align-top">
-                              <div className="flex flex-col gap-0.5">
+                            <td className="px-4 py-3 whitespace-nowrap align-top font-medium">{r.nguon}</td>
+                            <td className="px-4 py-3 bsi-mono whitespace-nowrap align-top text-[12px]">{r.ma_don || "—"}</td>
+                            <td className="px-4 py-3 align-top font-medium">{r.ten_sp || "—"}</td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="flex flex-col gap-1">
                                 {[...new Set(r.issues.map(iss => iss.group))].map(g => (
-                                  <span key={g} className="text-[11px] font-medium" style={{ color: "var(--navy)" }}>{GROUP_LABELS[g] || g}</span>
+                                  <span key={g} className="text-[12px] font-semibold">{GROUP_LABELS[g] || g}</span>
                                 ))}
                               </div>
                             </td>
-                            <td className="px-4 py-2.5"><IssueList issues={r.issues} /></td>
+                            <td className="px-4 py-3"><IssueList issues={r.issues} /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -832,77 +1038,91 @@ export default function DataIntegrationTool() {
               </div>
             )}
 
-            {/* TAB 3: XÁC NHẬN THỦ CÔNG */}
+            {/* TAB 3: CẦN BẠN XEM */}
             {activeTab === "manual_confirm" && (
               <div className="bsi-card p-5">
-                <div className="mb-4">
-                  <h3 className="bsi-serif text-[15px] font-semibold mb-1">Xác Nhận Thủ Công Các Trường Hợp Entity Resolution Nghi Vấn (Human-in-the-Loop)</h3>
-                  <p className="text-[12.5px]" style={{ color: "var(--ink-soft)" }}>
-                    Danh sách các sản phẩm có độ tương đồng mờ nằm trong khoảng nghi vấn ({config.fuzzyConfirmThreshold}% - {config.fuzzyHighThreshold}%). Hãy duyệt xác nhận ghép hoặc từ chối để đảm bảo tính toàn vẹn dữ liệu.
+                <div className="mb-5">
+                  <h3 className="bsi-serif text-[18px] font-semibold mb-1 flex items-center gap-2">
+                    <MousePointerClick size={20} style={{ color: "var(--amber-warn)" }} />
+                    👆 Các Sản Phẩm Cần Bạn Xem Xét
+                  </h3>
+                  <p className="text-[13.5px]" style={{ color: "var(--ink-soft)" }}>
+                    Hệ thống thấy tên sản phẩm trong file đơn hàng có vẻ <strong>gần giống</strong> nhưng chưa chắc chắn với sản phẩm trong danh sách gốc. Hãy xem và xác nhận giúp nhé!
                   </p>
+                  <ExpertDetail title="Thông tin kỹ thuật — Fuzzy Matching (Dành cho chuyên gia / giảng viên)">
+                    <p>Các bản ghi này có độ tương đồng Fuzzy Token-Sort nằm trong khoảng nghi ngờ ({config.fuzzyConfirmThreshold}% – {config.fuzzyHighThreshold}%), tức là hệ thống có đề xuất nhưng không đủ tin cậy để tự động ghép (Human-in-the-Loop). Quyết định của người dùng sẽ được ghi nhận vào trường <code>matchStatus</code> khi xuất file.</p>
+                  </ExpertDetail>
                 </div>
                 {result.pendingConfirmations.length === 0 ? (
-                  <p className="p-6 text-center text-[13px]" style={{ color: "var(--moss)" }}>
-                    ✓ Tất cả sản phẩm đều đã đối chiếu chính xác tuyệt đối! Không có bản ghi nào cần xác nhận thủ công.
-                  </p>
+                  <div className="p-10 text-center rounded-xl" style={{ background: "var(--moss-soft)" }}>
+                    <div className="text-5xl mb-3">🎉</div>
+                    <p className="text-[16px] font-semibold" style={{ color: "var(--moss)" }}>Tuyệt vời! Không có gì cần xem xét thêm!</p>
+                    <p className="text-[13px] mt-1" style={{ color: "var(--ink-soft)" }}>Tất cả sản phẩm đều đã được đối chiếu chính xác.</p>
+                  </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {result.pendingConfirmations.map((item, idx) => {
                       const manual = manualConfirmations.get(idx);
                       const isUnresolved = item.matchStatus === "UNRESOLVED";
                       return (
-                        <div key={idx} className="border rounded p-3 text-[12.5px]" style={{ borderColor: isUnresolved ? "var(--brick)" : "var(--line)", background: manual ? "var(--moss-soft)" : "var(--paper)" }}>
-                          {/* Phần 1: Sản phẩm gốc từ file đơn hàng */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div key={idx} className="border-2 rounded-xl p-4 text-[13px]" style={{
+                          borderColor: manual ? "var(--moss)" : isUnresolved ? "var(--brick)" : "var(--amber-warn)",
+                          background: manual?.decision === "ACCEPT" ? "var(--moss-soft)" : manual?.decision === "REJECT" ? "var(--brick-soft)" : "var(--paper)"
+                        }}>
+                          {/* Sản phẩm từ đơn hàng */}
+                          <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
                             <div>
-                              <span className="text-[10.5px] uppercase font-semibold tracking-wide" style={{ color: "var(--ink-soft)" }}>Sản phẩm từ đơn hàng:</span>
-                              <div className="mt-0.5">
-                                <span className="font-semibold">{item.ten_sp || "(Không có tên)"}</span>
-                                <span className="ml-2 text-[11px] bsi-mono" style={{ color: "var(--ink-soft)" }}>
-                                  Nguồn: {item.nguon} · Mã đơn: {item.ma_don} {item.ma_dinh_danh ? `· Mã SP: ${item.ma_dinh_danh}` : "· (Không có mã SP)"}
-                                </span>
+                              <span className="text-[11px] uppercase font-bold tracking-wide" style={{ color: "var(--ink-soft)" }}>📦 Sản phẩm từ file đơn hàng:</span>
+                              <div className="mt-1">
+                                <span className="font-bold text-[15px]">{item.ten_sp || "(Không có tên)"}</span>
+                                <div className="text-[12px] mt-0.5" style={{ color: "var(--ink-soft)" }}>
+                                  Nguồn: <strong>{item.nguon}</strong> · Mã đơn: <span className="bsi-mono">{item.ma_don}</span>
+                                  {item.ma_dinh_danh ? ` · Mã SP: ${item.ma_dinh_danh}` : " · (Không có mã SP)"}
+                                </div>
                               </div>
                             </div>
                             <SeverityBadge severity={item.matchStatus} />
                           </div>
 
-                          {/* Phần 2: Đề xuất ghép từ Catalog (hoặc thông báo UNRESOLVED) */}
+                          {/* Đề xuất ghép */}
                           {item.matched ? (
-                            <div className="p-2.5 rounded mb-2" style={{ background: "var(--brass-soft)" }}>
-                              <span className="text-[10.5px] uppercase font-semibold tracking-wide" style={{ color: "#7A5A15" }}>⇄ Đề xuất ghép với sản phẩm chuẩn trong Catalog:</span>
-                              <div className="mt-1 flex flex-wrap items-center gap-3">
-                                <span className="font-semibold text-[13px]">{item.matched.ten_sp}</span>
-                                <span className="bsi-mono text-[11px]" style={{ color: "var(--ink-soft)" }}>Mã: {item.matched.ma_dinh_danh || "—"}</span>
-                                <span className="bsi-badge" style={{ background: "var(--paper-card)", color: "var(--brass)" }}>Độ tương đồng: {item.matchScore}%</span>
+                            <div className="p-3 rounded-lg mb-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
+                              <span className="text-[11.5px] uppercase font-bold tracking-wide" style={{ color: "#7D4E00" }}>⇄ Hệ thống đề xuất ghép với sản phẩm trong danh sách gốc:</span>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                                <span className="font-bold text-[14px]">{item.matched.ten_sp}</span>
+                                <span className="bsi-mono text-[12px]" style={{ color: "var(--ink-soft)" }}>Mã: {item.matched.ma_dinh_danh || "—"}</span>
+                                <span className="bsi-badge font-bold" style={{ background: "white", color: "var(--amber-warn)", border: "1.5px solid var(--amber-warn)" }}>
+                                  Độ giống: {item.matchScore}%
+                                </span>
                               </div>
                             </div>
                           ) : (
-                            <div className="p-2.5 rounded mb-2" style={{ background: "var(--brick-soft)" }}>
-                              <span className="text-[12px] font-medium" style={{ color: "var(--brick)" }}>
-                                ⚠ Không tìm thấy sản phẩm tương ứng nào trong Danh mục chuẩn (Master Catalog). Sản phẩm này có thể chưa được nhập vào catalog hoặc tên/mã quá khác biệt.
+                            <div className="p-3 rounded-lg mb-3" style={{ background: "var(--brick-soft)", border: "1px solid var(--brick)" }}>
+                              <span className="text-[13px] font-medium" style={{ color: "var(--brick)" }}>
+                                ⚠️ Không tìm thấy sản phẩm nào tương ứng trong danh sách gốc. Sản phẩm này có thể chưa được nhập, hoặc tên/mã quá khác biệt.
                               </span>
                             </div>
                           )}
 
-                          {/* Phần 3: Nút hành động */}
-                          <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: "var(--line)" }}>
+                          {/* Nút hành động */}
+                          <div className="flex flex-wrap gap-2.5 pt-3 border-t items-center" style={{ borderColor: "var(--line)" }}>
                             {item.matched && (
                               <button
                                 onClick={() => handleManualDecision(idx, "ACCEPT", item)}
-                                className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "ACCEPT" ? "bsi-btn-primary" : "bsi-btn-secondary"}`}
+                                className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-bold rounded-lg transition ${manual?.decision === "ACCEPT" ? "bsi-btn-success" : "bsi-btn-secondary"}`}
                               >
-                                <Check size={13} /> Chấp nhận ghép
+                                <ThumbsUp size={16} /> ✅ Đúng rồi, ghép vào!
                               </button>
                             )}
                             <button
                               onClick={() => handleManualDecision(idx, "REJECT", item)}
-                              className={`px-3 py-1 text-[11.5px] font-medium rounded flex items-center gap-1 ${manual?.decision === "REJECT" ? "bg-red-800 text-white" : "bsi-btn-secondary"}`}
+                              className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-bold rounded-lg transition ${manual?.decision === "REJECT" ? "bsi-btn-danger" : "bsi-btn-secondary"}`}
                             >
-                              <X size={13} /> {item.matched ? "Từ chối (Không cùng sản phẩm)" : "Ghi nhận (Bỏ qua sản phẩm này)"}
+                              <ThumbsDown size={16} /> {item.matched ? "❌ Không, sai sản phẩm!" : "⏭️ Bỏ qua sản phẩm này"}
                             </button>
                             {manual && (
-                              <span className="text-[11.5px] font-medium self-center ml-auto" style={{ color: "var(--moss)" }}>
-                                ✓ Đã ghi nhận: {manual.decision === "ACCEPT" ? "Đã chấp nhận ghép" : "Đã từ chối / bỏ qua"}
+                              <span className="text-[13px] font-bold ml-auto" style={{ color: "var(--moss)" }}>
+                                ✓ Đã ghi nhận: {manual.decision === "ACCEPT" ? "Đồng ý ghép" : "Từ chối / bỏ qua"}
                               </span>
                             )}
                           </div>
@@ -914,186 +1134,223 @@ export default function DataIntegrationTool() {
               </div>
             )}
 
-            {/* TAB 4: BÁO CÁO CHẤT LƯỢNG & ĐÁNH GIÁ NGHIÊN CỨU (RQ1, RQ2, RQ3) */}
+            {/* TAB 4: BÁO CÁO CHI TIẾT */}
             {activeTab === "quality_report" && (
               <div className="space-y-5">
-                {/* PHẦN 1: ĐÁNH GIÁ RQ1 (CHUẨN HÓA & PHÁT HIỆN LỖI) */}
+                {/* PHẦN 1: KIỂM TRA LỖI THÔNG TIN */}
                 <div className="bsi-card p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-200 text-amber-900 bsi-mono">RQ1</span>
-                    <h3 className="bsi-serif text-[15px] font-semibold">Đánh Giá Hiệu Quả Ánh Xạ & 7 Nhóm Chuẩn Hóa Dữ Liệu</h3>
-                  </div>
-                  <p className="text-[12px] text-gray-600 mb-4">
-                    Đo lường khả năng xử lý dữ liệu không đồng nhất theo 7 nhóm đối tượng chuẩn hóa và 6 nhóm lỗi phân loại.
-                  </p>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-[12px]">
-                    <div className="p-2.5 rounded border border-gray-200 bg-white">
-                      <span className="text-gray-500 block text-[11px]">1. Mã định danh / SKU</span>
-                      <strong className="text-[14px] text-amber-900">{result.normStats?.idCount || 0}</strong> trường đã chuẩn hóa
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="icon-circle" style={{ background: "#FEF9E7", width: 44, height: 44 }}>
+                      <span className="font-black text-xl" style={{ color: "var(--brass)" }}>1</span>
                     </div>
-                    <div className="p-2.5 rounded border border-gray-200 bg-white">
-                      <span className="text-gray-500 block text-[11px]">2. Văn bản & Thương hiệu</span>
-                      <strong className="text-[14px] text-amber-900">{result.normStats?.textCount || 0}</strong> trường đã chuẩn hóa
-                    </div>
-                    <div className="p-2.5 rounded border border-gray-200 bg-white">
-                      <span className="text-gray-500 block text-[11px]">3. Thời gian (ISO Date)</span>
-                      <strong className="text-[14px] text-amber-900">{result.normStats?.dateCount || 0}</strong> trường đã chuẩn hóa
-                    </div>
-                    <div className="p-2.5 rounded border border-gray-200 bg-white">
-                      <span className="text-gray-500 block text-[11px]">4. Phân loại (Kênh/Status)</span>
-                      <strong className="text-[14px] text-amber-900">{(result.normStats?.channelCount || 0) + (result.normStats?.statusCount || 0)}</strong> trường đã chuẩn hóa
+                    <div>
+                      <h3 className="bsi-serif text-[17px] font-semibold">🔍 Kiểm Tra Lỗi Thông Tin</h3>
+                      <p className="text-[12.5px] text-gray-500">Hệ thống đã tự động phát hiện và phân loại các vấn đề trong dữ liệu</p>
                     </div>
                   </div>
 
-                  <h4 className="font-semibold text-[13px] mb-2.5">Phân bổ lỗi theo 6 nhóm chất lượng</h4>
-                  <div className="space-y-1.5">
+                  {/* Số liệu chuẩn hóa đơn giản hóa */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 mt-3">
+                    {[
+                      { icon: "🏷️", label: "Mã sản phẩm", val: result.normStats?.idCount || 0 },
+                      { icon: "📝", label: "Tên & Thương hiệu", val: result.normStats?.textCount || 0 },
+                      { icon: "📅", label: "Ngày tháng", val: result.normStats?.dateCount || 0 },
+                      { icon: "🏪", label: "Kênh & Trạng thái", val: (result.normStats?.channelCount || 0) + (result.normStats?.statusCount || 0) },
+                    ].map((item, i) => (
+                      <div key={i} className="p-3 rounded-xl border-2 bg-white text-center" style={{ borderColor: "var(--brass-soft)" }}>
+                        <div className="text-2xl mb-1">{item.icon}</div>
+                        <p className="text-[11.5px] text-gray-500 mb-1">{item.label}</p>
+                        <p className="font-black text-[22px]" style={{ color: "var(--brass)" }}>{item.val}</p>
+                        <p className="text-[11px] text-gray-400">trường đã làm sạch</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <h4 className="font-bold text-[14px] mb-3 flex items-center gap-2">
+                    <CircleAlert size={16} style={{ color: "var(--brick)" }} />
+                    Phân Bổ Lỗi Theo Loại
+                  </h4>
+                  <div className="space-y-2.5">
                     {Object.entries(GROUP_LABELS).map(([gKey, gLabel]) => {
                       const count = result.issues.filter((i) => i.group === gKey).length;
                       const pct = result.issues.length ? Math.round((count / result.issues.length) * 100) : 0;
+                      if (count === 0) return null;
                       return (
-                        <div key={gKey} className="flex items-center justify-between text-[12px] border-b pb-1" style={{ borderColor: "var(--line)" }}>
-                          <span className="font-medium">{gLabel}</span>
-                          <div className="flex items-center gap-3">
-                            <div className="w-28 bg-gray-200 rounded-full h-2 overflow-hidden">
-                              <div className="bg-amber-600 h-2" style={{ width: `${pct}%` }}></div>
-                            </div>
-                            <span className="bsi-mono w-14 text-right text-[11px]">{count} lỗi ({pct}%)</span>
+                        <div key={gKey} className="flex items-center gap-3 text-[13px]">
+                          <span className="font-semibold w-52 flex-shrink-0">{gLabel}</span>
+                          <div className="flex-1 progress-bar-track">
+                            <div className="progress-bar-fill" style={{ width: `${pct}%`, background: pct > 30 ? "var(--brick)" : pct > 10 ? "var(--amber-warn)" : "var(--moss)" }}></div>
                           </div>
+                          <span className="bsi-mono text-[12px] w-20 text-right font-semibold">{count} lỗi ({pct}%)</span>
                         </div>
                       );
                     })}
+                    {result.issues.length === 0 && (
+                      <div className="text-center py-4 text-[14px] font-semibold" style={{ color: "var(--moss)" }}>✅ Không có lỗi nào!</div>
+                    )}
                   </div>
+
+                  <ExpertDetail title="Chi tiết kỹ thuật — RQ1: Ánh xạ & 7 nhóm chuẩn hóa (Dành cho chuyên gia / giảng viên)">
+                    <p>RQ1 đo lường khả năng xử lý dữ liệu không đồng nhất theo 7 nhóm đối tượng chuẩn hóa: (1) Mã định danh/SKU, (2) Văn bản & thương hiệu, (3) Số học, (4) Thời gian (ISO Date), (5) Phân loại kênh/status, (6) Cấu trúc đa chi nhánh, (7) Encoding/charset. Phân loại lỗi theo 6 nhóm: schema, entity, value, temporal, semantic, technical.</p>
+                  </ExpertDetail>
                 </div>
 
-                {/* PHẦN 2: ĐÁNH GIÁ RQ2 (MULTI-TIER VS EXACT MATCHING) */}
-                <div className="bsi-card p-5" style={{ background: "var(--paper-card)", borderColor: "var(--brass)" }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-green-200 text-green-900 bsi-mono">RQ2</span>
-                    <h3 className="bsi-serif text-[15px] font-semibold text-green-950">
-                      So Sánh Đối Chiếu Thực Thể Nhiều Tầng vs Exact Matching Đơn Thuần
-                    </h3>
+                {/* PHẦN 2: ĐỘ KHỚP DỮ LIỆU */}
+                <div className="bsi-card p-5" style={{ borderColor: "var(--moss)", borderWidth: 2 }}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="icon-circle" style={{ background: "var(--moss-soft)", width: 44, height: 44 }}>
+                      <span className="font-black text-xl" style={{ color: "var(--moss)" }}>2</span>
+                    </div>
+                    <div>
+                      <h3 className="bsi-serif text-[17px] font-semibold text-green-900">🔗 Độ Khớp Dữ Liệu</h3>
+                      <p className="text-[12.5px] text-gray-500">So sánh hai cách: chỉ khớp khi đúng mã vs. hệ thống thông minh 3 bước</p>
+                    </div>
                   </div>
-                  <p className="text-[12px] text-gray-600 mb-4">
-                    Thực nghiệm kiểm chứng: Phương pháp 3 tầng (Mã chuẩn + Crosswalk + Fuzzy Token-Sort) cải thiện vượt trội tỷ lệ liên kết sản phẩm.
-                  </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                    <div className="p-3 rounded border bg-white text-center" style={{ borderColor: "var(--line)" }}>
-                      <p className="text-[11px] uppercase font-semibold text-gray-500">Exact Matching đơn thuần</p>
-                      <p className="bsi-serif text-2xl font-bold text-gray-700">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 mt-3">
+                    <div className="p-4 rounded-xl border-2 bg-white text-center" style={{ borderColor: "#D5D8DC" }}>
+                      <p className="text-[12px] uppercase font-bold text-gray-500 mb-2">😐 Cách thông thường<br/>(Chỉ khớp khi đúng mã)</p>
+                      <p className="bsi-serif text-[2.2rem] font-black text-gray-600">
                         {result.resolutionStats ? `${result.resolutionStats.exactMatchRate}%` : "—"}
                       </p>
-                      <p className="text-[11px] text-gray-500 mt-0.5">
-                        {result.resolutionStats ? `${result.resolutionStats.exactOnlyMatchesCount}/${result.stats.totalRows} dòng khớp` : "Chỉ khớp khi đúng mã"}
+                      <p className="text-[12px] text-gray-400 mt-1">
+                        {result.resolutionStats ? `${result.resolutionStats.exactOnlyMatchesCount}/${result.stats.totalRows} đơn khớp` : "Chỉ khớp khi đúng mã"}
                       </p>
                     </div>
 
-                    <div className="p-3 rounded border bg-white text-center" style={{ borderColor: "var(--moss)", background: "var(--moss-soft)" }}>
-                      <p className="text-[11px] uppercase font-semibold" style={{ color: "var(--moss)" }}>Đối chiếu 3 tầng (Hệ thống)</p>
-                      <p className="bsi-serif text-2xl font-bold" style={{ color: "var(--moss)" }}>
-                        {result.resolutionStats ? `${result.resolutionStats.multiTierTotalLinkedRate}%` : `${Math.round((result.stats.matchedCount / result.stats.totalRows) * 100)}%`}
+                    <div className="p-4 rounded-xl border-2 text-center" style={{ borderColor: "var(--moss)", background: "var(--moss-soft)" }}>
+                      <p className="text-[12px] uppercase font-bold mb-2" style={{ color: "var(--moss)" }}>🚀 Hệ thống này<br/>(Ghép thông minh 3 bước)</p>
+                      <p className="bsi-serif text-[2.2rem] font-black" style={{ color: "var(--moss)" }}>
+                        {result.resolutionStats ? `${result.resolutionStats.multiTierTotalLinkedRate}%` : `${matchRate}%`}
                       </p>
-                      <p className="text-[11px] text-gray-700 mt-0.5">
-                        Tầng 1 (Mã) + Tầng 2 (Crosswalk) + Tầng 3 (Fuzzy)
-                      </p>
+                      <p className="text-[12px] mt-1" style={{ color: "var(--moss)" }}>Bước 1 (Mã) + Bước 2 (Tra cứu) + Bước 3 (So sánh tên)</p>
                     </div>
 
-                    <div className="p-3 rounded border bg-white text-center" style={{ borderColor: "var(--brass)", background: "var(--brass-soft)" }}>
-                      <p className="text-[11px] uppercase font-semibold text-amber-900">Mức độ cải thiện (Improvement)</p>
-                      <p className="bsi-serif text-2xl font-bold text-amber-900">
+                    <div className="p-4 rounded-xl border-2 text-center" style={{ borderColor: "var(--brass)", background: "var(--brass-soft)" }}>
+                      <p className="text-[12px] uppercase font-bold text-amber-900 mb-2">🏆 Cải Thiện Được</p>
+                      <p className="bsi-serif text-[2.2rem] font-black text-amber-900">
                         {result.resolutionStats ? `+${result.resolutionStats.improvementRate}%` : "+30%"}
                       </p>
-                      <p className="text-[11px] text-amber-800 mt-0.5">
-                        Khắc phục tên viết tắt, thiếu dấu, sai mã
-                      </p>
+                      <p className="text-[12px] text-amber-700 mt-1">Nhờ nhận dạng tên viết tắt, thiếu dấu, sai mã</p>
                     </div>
                   </div>
 
                   {result.resolutionStats && (
-                    <div className="p-3 rounded bg-white border border-gray-200 text-[11.5px] text-gray-700 space-y-1">
-                      <div>• <strong>Tầng 1 (Exact ID):</strong> {result.resolutionStats.breakdown.tier1_exact} bản ghi khớp chính xác qua mã chuẩn.</div>
-                      <div>• <strong>Tầng 2 (Crosswalk/Alias):</strong> {result.resolutionStats.breakdown.tier2_crosswalk} bản ghi khớp qua bảng tra cứu mã nội bộ.</div>
-                      <div>• <strong>Tầng 3 (Fuzzy Token-Sort):</strong> {result.resolutionStats.breakdown.tier3_fuzzy_high} bản ghi tự động khớp mờ điểm cao + {result.resolutionStats.breakdown.tier3_fuzzy_confirm} bản ghi chuyển duyệt thủ công.</div>
+                    <div className="p-4 rounded-xl border border-gray-200 bg-white text-[13px] space-y-2">
+                      <p className="font-bold text-gray-700 mb-2">📊 Chi tiết từng bước ghép:</p>
+                      <div className="flex items-center gap-3">
+                        <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Bước 1</span>
+                        <span><strong>Khớp Mã Chính Xác:</strong> {result.resolutionStats.breakdown.tier1_exact} đơn hàng khớp bằng mã sản phẩm.</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="bsi-badge" style={{ background: "var(--amber-warn-soft)", color: "var(--amber-warn)" }}>Bước 2</span>
+                        <span><strong>Tra Cứu Mã Tương Đương:</strong> {result.resolutionStats.breakdown.tier2_crosswalk} đơn khớp qua bảng mã nội bộ.</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="bsi-badge" style={{ background: "var(--brass-soft)", color: "#7A5A15" }}>Bước 3</span>
+                        <span><strong>So Sánh Tên Sản Phẩm:</strong> {result.resolutionStats.breakdown.tier3_fuzzy_high} tự động ghép + {result.resolutionStats.breakdown.tier3_fuzzy_confirm} chuyển bạn xem xét.</span>
+                      </div>
                     </div>
                   )}
+
+                  <ExpertDetail title="Chi tiết kỹ thuật — RQ2: Multi-tier Entity Resolution vs Exact Matching (Dành cho chuyên gia / giảng viên)">
+                    <p>RQ2 kiểm chứng thực nghiệm: phương pháp 3 tầng (Tầng 1: Exact ID match, Tầng 2: Crosswalk/Alias lookup, Tầng 3: Fuzzy Token-Sort với ngưỡng {config.fuzzyHighThreshold}%/{config.fuzzyConfirmThreshold}%) cải thiện tỷ lệ liên kết thực thể so với Exact Matching đơn thuần. Bipartite Matching được sử dụng khi không có catalog.</p>
+                  </ExpertDetail>
                 </div>
 
-                {/* PHẦN 3: ĐÁNH GIÁ RQ3 (GIẢM SAI LỆCH BÁO CÁO QUẢN TRỊ) */}
+                {/* PHẦN 3: DOANH THU THỰC TẾ */}
                 <div className="bsi-card p-5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-200 text-blue-900 bsi-mono">RQ3</span>
-                    <h3 className="bsi-serif text-[15px] font-semibold text-blue-950">
-                      Đánh Giá Mức Độ Giảm Sai Lệch Trong Báo Cáo Quản Trị
-                    </h3>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="icon-circle" style={{ background: "#FEF9E7", width: 44, height: 44 }}>
+                      <span className="font-black text-xl" style={{ color: "var(--brass)" }}>3</span>
+                    </div>
+                    <div>
+                      <h3 className="bsi-serif text-[17px] font-semibold">💰 Doanh Thu Thực Tế</h3>
+                      <p className="text-[12.5px] text-gray-500">So sánh trước và sau khi làm sạch dữ liệu</p>
+                    </div>
                   </div>
-                  <p className="text-[12px] text-gray-600 mb-4">
-                    So sánh chỉ số quản trị giữa Dữ liệu thô ban đầu (chứa đơn hủy, trùng lặp mã đơn, lệch giá) và Dữ liệu sau khi tích hợp & kiểm soát chất lượng.
-                  </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                    <div className="p-3 rounded border bg-white text-center">
-                      <span className="text-[11px] uppercase font-semibold text-gray-500">Doanh thu thô ban đầu</span>
-                      <p className="bsi-serif text-lg font-bold text-gray-700">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3 mb-4">
+                    <div className="p-4 rounded-xl border-2 bg-white text-center" style={{ borderColor: "#D5D8DC" }}>
+                      <span className="text-[12px] uppercase font-bold text-gray-500">📋 Doanh Thu Thô Ban Đầu</span>
+                      <p className="bsi-serif text-[1.4rem] font-black text-gray-700 mt-2">
                         {formatVND(result.governanceAudit?.rawRevenueTotal || result.revenueTotal)}
                       </p>
-                      <span className="text-[11px] text-red-600">Chứa đơn hủy & trùng lặp</span>
+                      <span className="text-[12px] font-medium" style={{ color: "var(--brick)" }}>Bao gồm đơn hủy & trùng lặp</span>
                     </div>
 
-                    <div className="p-3 rounded border bg-white text-center" style={{ background: "var(--moss-soft)", borderColor: "var(--moss)" }}>
-                      <span className="text-[11px] uppercase font-semibold" style={{ color: "var(--moss)" }}>Doanh thu sạch thực tế</span>
-                      <p className="bsi-serif text-lg font-bold" style={{ color: "var(--moss)" }}>
+                    <div className="p-4 rounded-xl border-2 text-center" style={{ background: "var(--moss-soft)", borderColor: "var(--moss)" }}>
+                      <span className="text-[12px] uppercase font-bold" style={{ color: "var(--moss)" }}>✅ Doanh Thu Thực Tế Sạch</span>
+                      <p className="bsi-serif text-[1.4rem] font-black mt-2" style={{ color: "var(--moss)" }}>
                         {formatVND(result.governanceAudit?.cleanRevenueTotal || result.revenueTotal)}
                       </p>
-                      <span className="text-[11px] text-green-800">Đã kiểm soát & làm sạch</span>
+                      <span className="text-[12px] font-medium text-green-700">Đã kiểm soát & làm sạch</span>
                     </div>
 
-                    <div className="p-3 rounded border bg-white text-center" style={{ background: "var(--brick-soft)", borderColor: "var(--brick)" }}>
-                      <span className="text-[11px] uppercase font-semibold" style={{ color: "var(--brick)" }}>Sai lệch doanh thu phòng ngừa</span>
-                      <p className="bsi-serif text-lg font-bold" style={{ color: "var(--brick)" }}>
+                    <div className="p-4 rounded-xl border-2 text-center" style={{ background: "var(--brick-soft)", borderColor: "var(--brick)" }}>
+                      <span className="text-[12px] uppercase font-bold" style={{ color: "var(--brick)" }}>⚠️ Doanh Thu Ảo Loại Bỏ</span>
+                      <p className="bsi-serif text-[1.4rem] font-black mt-2" style={{ color: "var(--brick)" }}>
                         {formatVND(result.governanceAudit?.revenueDiscrepancyPrevented || 0)}
                       </p>
-                      <span className="text-[11px] text-red-800">Doanh thu ảo loại trừ</span>
+                      <span className="text-[12px] font-medium" style={{ color: "var(--brick)" }}>Tránh được sai lệch báo cáo</span>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded bg-white border border-gray-200 text-[11.5px] text-gray-700 space-y-1">
-                    <div>• <strong>Loại trừ doanh thu ảo từ đơn hủy:</strong> Đã phát hiện và gắn cờ {formatVND(result.governanceAudit?.cancelledRevenuePrevented || 0)} từ các đơn hàng có trạng thái Đã hủy/Trả hàng.</div>
-                    <div>• <strong>Hợp nhất phân mảnh tên sản phẩm:</strong> Từ {result.governanceAudit?.rawUniqueTitlesCount || 0} biến thể tên gọi không đồng nhất giữa các kênh, hệ thống đã quy chuẩn về {result.governanceAudit?.cleanUniqueProductsCount || 0} thực thể sản phẩm chuẩn.</div>
+                  <div className="p-4 rounded-xl border border-gray-200 bg-white text-[13px] space-y-2.5">
+                    <p className="font-bold text-gray-700 mb-1">📊 Những gì hệ thống đã làm:</p>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[16px] mt-0.5">🚫</span>
+                      <p><strong>Loại bỏ doanh thu từ đơn đã hủy:</strong> Phát hiện và gắn cờ <strong className="text-red-700">{formatVND(result.governanceAudit?.cancelledRevenuePrevented || 0)}</strong> từ các đơn hàng có trạng thái Đã hủy / Trả hàng.</p>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[16px] mt-0.5">🔗</span>
+                      <p><strong>Hợp nhất tên sản phẩm:</strong> Từ <strong>{result.governanceAudit?.rawUniqueTitlesCount || 0}</strong> biến thể tên không đồng nhất giữa các kênh → quy chuẩn về <strong className="text-green-700">{result.governanceAudit?.cleanUniqueProductsCount || 0}</strong> sản phẩm chuẩn.</p>
+                    </div>
                   </div>
+
+                  <ExpertDetail title="Chi tiết kỹ thuật — RQ3: Giảm sai lệch báo cáo quản trị (Dành cho chuyên gia / giảng viên)">
+                    <p>RQ3 so sánh chỉ số quản trị giữa dữ liệu thô (chứa đơn hủy, trùng lặp mã đơn, lệch giá vượt ngưỡng {config.priceDeviationThreshold}%) và dữ liệu sau khi tích hợp & kiểm soát chất lượng. Governance Audit ghi lại toàn bộ: cancelledRevenuePrevented, rawUniqueTitlesCount, cleanUniqueProductsCount, revenueDiscrepancyPrevented để phục vụ kiểm toán.</p>
+                  </ExpertDetail>
                 </div>
               </div>
             )}
 
-            {/* TAB 5: DỮ LIỆU TÍCH HỢP */}
+            {/* TAB 5: XEM TOÀN BỘ DỮ LIỆU */}
             {activeTab === "data" && (
               <div className="bsi-card overflow-hidden">
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <table className="w-full text-[12.5px]">
+                <div className="p-4 flex items-center gap-3" style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>
+                  <Eye size={16} style={{ color: "var(--ink-soft)" }} />
+                  <span className="text-[13px] font-semibold">Toàn bộ {result.integrated.length} dòng dữ liệu đã tích hợp</span>
+                  <button onClick={exportSummaryFile} className="ml-auto bsi-btn-cta flex items-center gap-2 px-4 py-2 text-[13px]">
+                    <Download size={14} /> ⬇️ Tải Xuống File
+                  </button>
+                </div>
+                <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+                  <table className="w-full text-[13px]">
                     <thead className="sticky top-0" style={{ background: "var(--paper-card)" }}>
                       <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                        {["Nguồn", "Mã đơn", "Ngày", "Tên sản phẩm chuẩn", "Mã định danh", "Kênh", "Trạng thái", "SL", "Giá bán", "Thành tiền", "Kết quả"].map((h) => (
-                          <th key={h} className="text-left font-semibold px-3.5 py-2.5 uppercase tracking-wide text-[10.5px]" style={{ color: "var(--ink-soft)" }}>{h}</th>
+                        {["Nguồn", "Mã Đơn", "Ngày", "Tên Sản Phẩm", "Mã Hàng", "Kênh", "Trạng Thái", "SL", "Giá Bán", "Thành Tiền", "Kết Quả"].map((h) => (
+                          <th key={h} className="text-left font-bold px-3.5 py-3 uppercase tracking-wide text-[11px]" style={{ color: "var(--ink-soft)" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {result.integrated.map((r, i) => (
                         <tr key={i} className="bsi-row" style={{ borderBottom: "1px solid var(--line)" }}>
-                          <td className="px-3.5 py-2 whitespace-nowrap">{r.nguon}</td>
-                          <td className="px-3.5 py-2 bsi-mono whitespace-nowrap">{r.ma_don || "—"}</td>
-                          <td className="px-3.5 py-2 whitespace-nowrap">{r.ngay || "—"}</td>
-                          <td className="px-3.5 py-2 font-medium">{r.ten_sp || "—"}</td>
-                          <td className="px-3.5 py-2 bsi-mono whitespace-nowrap">{r.ma_dinh_danh || "—"}</td>
-                          <td className="px-3.5 py-2 whitespace-nowrap">{r.kenh}</td>
-                          <td className="px-3.5 py-2 whitespace-nowrap text-[11.5px]">{r.trang_thai || "—"}</td>
-                          <td className="px-3.5 py-2">{r.so_luong}</td>
-                          <td className="px-3.5 py-2 whitespace-nowrap">{formatVND(r.gia)}</td>
-                          <td className="px-3.5 py-2 whitespace-nowrap font-medium">{formatVND(r.thanh_tien)}</td>
-                          <td className="px-3.5 py-2">
+                          <td className="px-3.5 py-2.5 whitespace-nowrap">{r.nguon}</td>
+                          <td className="px-3.5 py-2.5 bsi-mono whitespace-nowrap text-[12px]">{r.ma_don || "—"}</td>
+                          <td className="px-3.5 py-2.5 whitespace-nowrap">{r.ngay || "—"}</td>
+                          <td className="px-3.5 py-2.5 font-semibold">{r.ten_sp || "—"}</td>
+                          <td className="px-3.5 py-2.5 bsi-mono whitespace-nowrap text-[12px]">{r.ma_dinh_danh || "—"}</td>
+                          <td className="px-3.5 py-2.5 whitespace-nowrap">{r.kenh}</td>
+                          <td className="px-3.5 py-2.5 whitespace-nowrap text-[12px]">{r.trang_thai || "—"}</td>
+                          <td className="px-3.5 py-2.5 font-bold">{r.so_luong}</td>
+                          <td className="px-3.5 py-2.5 whitespace-nowrap">{formatVND(r.gia)}</td>
+                          <td className="px-3.5 py-2.5 whitespace-nowrap font-bold">{formatVND(r.thanh_tien)}</td>
+                          <td className="px-3.5 py-2.5">
                             {r.issues.length === 0
-                              ? <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Sạch</span>
-                              : <span className="bsi-badge" style={{ background: "var(--brick-soft)", color: "var(--brick)" }}>{r.issues.length} lỗi</span>}
+                              ? <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>✅ Sạch</span>
+                              : <span className="bsi-badge" style={{ background: "var(--brick-soft)", color: "var(--brick)" }}>⚠️ {r.issues.length} lỗi</span>}
                           </td>
                         </tr>
                       ))}
