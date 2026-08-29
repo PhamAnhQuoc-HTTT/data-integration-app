@@ -5,7 +5,7 @@
 import { removeDiacritics } from "./normalize";
 
 export const FIELD_PATTERNS = {
-  ma_don: ["ma don", "ma hoa don", "order id", "order", "ma dh", "so don", "ma giao dich", "stt", "invoice id", "invoice"],
+  ma_don: ["ma don hang", "ma don", "ma hoa don", "order id", "order", "ma dh", "so don", "ma giao dich", "invoice id", "invoice"],
   ngay: ["ngay gio", "ngay dat", "ngay ban", "ngay", "date", "created at", "created", "order date", "time", "timestamp"],
   ten_sp: ["ten san pham", "san pham", "ten hang", "ten sp", "tieu de", "ten", "product name", "product", "item name", "title"],
   thuong_hieu: ["ten ncc", "nha cung cap", "ncc", "ma ncc", "thuong hieu", "nha san xuat", "nha xuat ban", "nxb", "tac gia", "brand", "publisher", "manufacturer", "author", "vendor"],

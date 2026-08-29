@@ -370,7 +370,8 @@ export function checkReferentialIntegrity(rows) {
 
 export function checkEncodingIssues(rows) {
   const issues = [];
-  const encodingRegex = /\uFFFD|Ã¡|Ã©|Ã|Æ|Å|Ä/i;
+  // Chỉ bắt các chuỗi lỗi Mojibake điển hình (2-byte UTF-8 bị giải mã sai thành Windows-1252 / ISO-8859-1) hoặc replacement char \uFFFD
+  const encodingRegex = /\uFFFD|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã½|Ã |Ã¨|Ã¬|Ã²|Ã¹|Ã¢|Ãª|Ã´|Ä‘|Æ°|Æ¡|á»|â€™|â€œ|â€\x9d/;
   rows.forEach((row, i) => {
     const fields = ['ten_sp', 'kenh', 'thuong_hieu', 'trang_thai', 'ma_don', 'ma_dinh_danh'];
     for (const field of fields) {
