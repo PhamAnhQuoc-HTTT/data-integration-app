@@ -489,10 +489,24 @@ export default function DataIntegrationTool() {
     return { fileName: file.name, headers, dataRows, mapping };
   };
 
+  /** Tự động nhận diện kênh bán từ tên file */
+  const detectChannelFromFilename = (filename) => {
+    const n = (filename || "").toLowerCase().replace(/[_\-\.]+/g, " ");
+    if (n.includes("shopee")) return "Shopee";
+    if (n.includes("lazada")) return "Lazada";
+    if (n.includes("tiktok") || n.includes("tik tok")) return "TikTok Shop";
+    if (n.includes("pos") || n.includes("cua hang") || n.includes("tai quay")) return "POS";
+    if (n.includes("fahasa")) return "FAHASA";
+    if (n.includes("tiki")) return "Tiki";
+    if (n.includes("sendo")) return "Sendo";
+    return "";
+  };
+
   const addOrderFile = async (file) => {
     setParseError("");
     try {
       const fs = await parseToFileState(file);
+      fs.channelLabel = detectChannelFromFilename(file.name);
       setOrderFiles((prev) => (prev.length >= MAX_ORDER_FILES ? prev : [...prev, fs]));
     } catch {
       setParseError(`Không đọc được file "${file.name}". Hãy kiểm tra định dạng (.csv/.xlsx/.xls).`);
