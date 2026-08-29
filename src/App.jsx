@@ -151,7 +151,7 @@ const PRESETS = {
     badgeBg: "var(--moss-soft)",
     shortDesc: "Cân bằng giữa độ chính xác và tính tự động cho bán lẻ hàng ngày.",
     detail: "Tự động chuẩn hóa các biến thể tên thông thường (bỏ dấu, viết tắt). Chỉ yêu cầu người dùng xác nhận khi độ tương đồng nằm trong khoảng nghi ngờ (70% - 90%) và cảnh báo khi giá bán chênh lệch > 30% so với giá chuẩn.",
-    suitableFor: "Doanh nghiệp bán lẻ đa kênh thông thường (POS + Shopee / TikTok Shop / FAHASA).",
+    suitableFor: "Doanh nghiệp bán lẻ đa kênh thông thường.",
     config: {
       fuzzyConfirmThreshold: 70,
       fuzzyHighThreshold: 90,
@@ -214,20 +214,19 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
 
   return (
     <div className="bsi-card relative p-5 pt-7 bsi-card-hover">
-      <span className="bsi-tab-label">📦 Bước 1 — Bắt buộc</span>
       <div className="flex items-center gap-2.5 mb-2">
         <div className="icon-circle" style={{ background: "#EBF5FB" }}>
           <ShoppingCart size={24} style={{ color: "#2471A3" }} />
         </div>
         <div>
           <h3 className="bsi-serif font-semibold text-[17px] leading-tight">Tải lên file Đơn Hàng</h3>
-          <p className="text-[12.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Từ POS, Shopee, Lazada, TikTok Shop, FAHASA…</p>
+          <p className="text-[12.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Từ POS, Shopee, Lazada, TikTok Shop…</p>
         </div>
       </div>
       <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "var(--moss-soft)", border: "1px solid var(--moss)" }}>
         <Info size={14} style={{ color: "var(--moss)", flexShrink: 0 }} />
         <p className="text-[12px]" style={{ color: "var(--moss)" }}>
-          Hỗ trợ tối đa <strong>{maxFiles} file</strong>. Mỗi file là một kênh bán hàng khác nhau.
+          Hỗ trợ tối đa <strong>{maxFiles} file</strong>.
         </p>
       </div>
       {!full && (
@@ -301,14 +300,13 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
 
   return (
     <div className="bsi-card relative p-5 pt-7 bsi-card-hover">
-      <span className="bsi-tab-label">📋 Bước 2 — Không bắt buộc</span>
       <div className="flex items-center gap-2.5 mb-2">
         <div className="icon-circle" style={{ background: "#FEF9E7" }}>
           <Package size={24} style={{ color: "var(--brass)" }} />
         </div>
         <div>
           <h3 className="bsi-serif font-semibold text-[17px] leading-tight">{title}</h3>
-          <span className="bsi-badge mt-1" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Tệp chuẩn mực</span>
+          <span className="bsi-badge mt-1" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Tệp chuẩn</span>
         </div>
       </div>
       <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
@@ -496,7 +494,6 @@ export default function DataIntegrationTool() {
     if (n.includes("lazada")) return "Lazada";
     if (n.includes("tiktok") || n.includes("tik tok")) return "TikTok Shop";
     if (n.includes("pos") || n.includes("cua hang") || n.includes("tai quay")) return "POS";
-    if (n.includes("fahasa")) return "FAHASA";
     if (n.includes("tiki")) return "Tiki";
     if (n.includes("sendo")) return "Sendo";
     return "";
@@ -692,9 +689,8 @@ export default function DataIntegrationTool() {
                         onClick={() => handleSelectPreset(key)}
                         onMouseEnter={() => setHoveredPresetId(key)}
                         onMouseLeave={() => setHoveredPresetId(null)}
-                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${
-                          isSelected ? "border-green-600 bg-green-50 shadow-md" : "border-gray-200 hover:border-amber-400 bg-white"
-                        }`}
+                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all relative flex flex-col justify-between ${isSelected ? "border-green-600 bg-green-50 shadow-md" : "border-gray-200 hover:border-amber-400 bg-white"
+                          }`}
                       >
                         <div>
                           <div className="flex items-center justify-between mb-2">
@@ -843,9 +839,6 @@ export default function DataIntegrationTool() {
             </div>
 
             <div className="flex flex-col items-center gap-3">
-              {!readyToProcess && (
-                <p className="text-[13px] text-gray-500">👆 Hãy tải lên ít nhất 1 file đơn hàng để bắt đầu</p>
-              )}
               <button onClick={processAll} disabled={!readyToProcess} className="bsi-btn-cta flex items-center gap-3 px-8 py-4 text-[17px]">
                 🚀 Bắt Đầu Kiểm Tra & Tổng Hợp Dữ Liệu
                 <ArrowRight size={20} />
@@ -875,7 +868,7 @@ export default function DataIntegrationTool() {
                 }}>
                   {i < procIdx ? <CheckCircle2 size={20} style={{ color: "var(--moss)", flexShrink: 0 }} />
                     : i === procIdx ? <Loader2 size={20} className="bsi-spin" style={{ color: "var(--amber-warn)", flexShrink: 0 }} />
-                    : <div className="w-5 h-5 rounded-full border-2 flex-shrink-0" style={{ borderColor: "var(--line)" }} />}
+                      : <div className="w-5 h-5 rounded-full border-2 flex-shrink-0" style={{ borderColor: "var(--line)" }} />}
                   <span className="text-[14px] font-medium" style={{ color: i <= procIdx ? "var(--ink)" : "var(--ink-soft)" }}>{s}</span>
                 </div>
               ))}
@@ -1223,7 +1216,7 @@ export default function DataIntegrationTool() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 mt-3">
                     <div className="p-4 rounded-xl border-2 bg-white text-center" style={{ borderColor: "#D5D8DC" }}>
-                      <p className="text-[12px] uppercase font-bold text-gray-500 mb-2">😐 Cách thông thường<br/>(Chỉ khớp khi đúng mã)</p>
+                      <p className="text-[12px] uppercase font-bold text-gray-500 mb-2">😐 Cách thông thường<br />(Chỉ khớp khi đúng mã)</p>
                       <p className="bsi-serif text-[2.2rem] font-black text-gray-600">
                         {result.resolutionStats ? `${result.resolutionStats.exactMatchRate}%` : "—"}
                       </p>
@@ -1233,7 +1226,7 @@ export default function DataIntegrationTool() {
                     </div>
 
                     <div className="p-4 rounded-xl border-2 text-center" style={{ borderColor: "var(--moss)", background: "var(--moss-soft)" }}>
-                      <p className="text-[12px] uppercase font-bold mb-2" style={{ color: "var(--moss)" }}>🚀 Hệ thống này<br/>(Ghép thông minh 3 bước)</p>
+                      <p className="text-[12px] uppercase font-bold mb-2" style={{ color: "var(--moss)" }}>🚀 Hệ thống này<br />(Ghép thông minh 3 bước)</p>
                       <p className="bsi-serif text-[2.2rem] font-black" style={{ color: "var(--moss)" }}>
                         {result.resolutionStats ? `${result.resolutionStats.multiTierTotalLinkedRate}%` : `${matchRate}%`}
                       </p>
