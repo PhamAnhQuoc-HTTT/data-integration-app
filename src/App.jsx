@@ -996,55 +996,87 @@ export default function DataIntegrationTool() {
               </div>
             )}
 
-            {/* TAB 2: KIỂM TRA LỖI */}
+            {/* TAB 2: KIỂM TRA LỖI (GIAO DIỆN THẺ DỄ ĐỌC) */}
             {activeTab === "issues" && (
               <div className="bsi-card overflow-hidden">
-                {/* Chú thích màu sắc */}
-                <div className="p-4 flex flex-wrap gap-3 text-[12.5px]" style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>
-                  <span className="font-semibold text-gray-600">Ý nghĩa màu sắc:</span>
-                  <span><SeverityBadge severity="AUTO_FIXED" /> — Hệ thống đã tự sửa, bạn không cần làm gì</span>
-                  <span><SeverityBadge severity="NEEDS_CONFIRMATION" /> — Có gợi ý sửa, cần bạn xem xét</span>
-                  <span><SeverityBadge severity="FLAGGED_ONLY" /> — Đã đánh dấu, cần bạn quyết định</span>
-                </div>
                 {result.issues.length === 0 ? (
                   <div className="p-10 text-center">
                     <div className="text-5xl mb-3">🎉</div>
-                    <p className="text-[16px] font-semibold" style={{ color: "var(--moss)" }}>Tuyệt vời! Không phát hiện lỗi nào!</p>
-                    <p className="text-[13px] mt-1 text-gray-500">Dữ liệu của bạn hoàn toàn sạch và nhất quán.</p>
+                    <p className="text-[16px] font-semibold" style={{ color: "var(--moss)" }}>
+                      Tuyệt vời! Không phát hiện lỗi nào!
+                    </p>
+                    <p className="text-[13px] mt-1 text-gray-500">
+                      Dữ liệu của bạn hoàn toàn sạch và nhất quán.
+                    </p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[13px]">
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>
-                          {["Nguồn File", "Mã Đơn", "Tên Sản Phẩm", "Loại Lỗi", "Chi Tiết Vấn Đề"].map((h) => (
-                            <th key={h} className="text-left font-bold px-4 py-3 uppercase tracking-wide text-[11px]" style={{ color: "var(--ink-soft)" }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.integrated.filter((r) => r.issues.length > 0).map((r, i) => (
-                          <tr key={i} className="bsi-row" style={{ borderBottom: "1px solid var(--line)" }}>
-                            <td className="px-4 py-3 whitespace-nowrap align-top font-medium">{r.nguon}</td>
-                            <td className="px-4 py-3 bsi-mono whitespace-nowrap align-top text-[12px]">{r.ma_don || "—"}</td>
-                            <td className="px-4 py-3 align-top font-medium">{r.ten_sp || "—"}</td>
-                            <td className="px-4 py-3 align-top">
-                              <div className="flex flex-col gap-1">
-                                {[...new Set(r.issues.map(iss => iss.group))].map(g => (
-                                  <span key={g} className="text-[12px] font-semibold">{GROUP_LABELS[g] || g}</span>
-                                ))}
+                  <div className="p-4 bg-gray-50/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {result.integrated
+                        .filter((r) => r.issues.length > 0)
+                        .map((r, i) => (
+                          <div
+                            key={i}
+                            className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between gap-3"
+                          >
+                            {/* 1. THÔNG TIN SẢN PHẨM VÀ NGUỒN FILE */}
+                            <div className="border-b border-gray-100 pb-2.5">
+                              <div className="flex justify-between items-start gap-2 mb-1">
+                                <h4 className="font-bold text-gray-900 text-base leading-snug">
+                                  {r.ten_sp || "Sản phẩm chưa rõ tên"}
+                                </h4>
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 shrink-0 border border-gray-200">
+                                  📂 {r.nguon}
+                                </span>
                               </div>
-                            </td>
-                            <td className="px-4 py-3"><IssueList issues={r.issues} /></td>
-                          </tr>
+                              <p className="text-xs text-gray-500 font-mono">
+                                Mã đơn: <span className="font-semibold text-gray-700">{r.ma_don || "—"}</span>
+                              </p>
+                            </div>
+
+                            {/* 2. PHÂN LOẠI LỖI (BADGE NỔI BẬT) */}
+                            <div className="flex flex-wrap gap-2">
+                              {[...new Set(r.issues.map((iss) => iss.group))].map((g) => {
+                                const label = GROUP_LABELS[g] || g;
+                                let badgeStyle = "bg-rose-100 text-rose-900 border-rose-300";
+                                let icon = "⚠️";
+
+                                if (label.includes("Giá") || label.includes("Tiền")) {
+                                  badgeStyle = "bg-amber-100 text-amber-900 border-amber-300";
+                                  icon = "🏷️";
+                                } else if (label.includes("Ý Nghĩa") || label.includes("Chuẩn")) {
+                                  badgeStyle = "bg-blue-100 text-blue-900 border-blue-300";
+                                  icon = "🚚";
+                                } else if (label.includes("Ngày")) {
+                                  badgeStyle = "bg-purple-100 text-purple-900 border-purple-300";
+                                  icon = "📅";
+                                }
+
+                                return (
+                                  <span
+                                    key={g}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border ${badgeStyle}`}
+                                  >
+                                    <span>{icon}</span>
+                                    <span>{label}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+
+                            {/* 3. CHI TIẾT NỘI DUNG LỖI */}
+                            <div className="bg-red-50/70 border border-red-100 rounded-lg p-3">
+                              <div className="text-sm text-gray-800 leading-relaxed font-medium">
+                                <IssueList issues={r.issues} />
+                              </div>
+                            </div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                    </div>
                   </div>
                 )}
               </div>
             )}
-
             {/* TAB 3: CẦN BẠN XEM */}
             {activeTab === "manual_confirm" && (
               <div className="bsi-card p-5">
