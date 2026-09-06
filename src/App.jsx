@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import * as XLSX from "xlsx";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from "recharts";
 import {
   UploadCloud, Layers, Package, CheckCircle2, AlertTriangle,
@@ -67,6 +67,12 @@ const Tokens = () => (
     }
     .bsi-btn-cta:hover:not(:disabled) { opacity: 0.92; transform: translateY(-2px); box-shadow: 0 6px 20px rgba(45,122,74,0.45); }
     .bsi-btn-cta:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+    .bsi-btn-disabled-gray {
+      background: #d1d5db; color: #9ca3af; font-weight: 700; border-radius: 10px; font-size: 16px;
+      cursor: not-allowed; opacity: 1;
+    }
+    .bsi-card-clickable { cursor: pointer; }
+    .bsi-card-clickable:hover { box-shadow: 0 8px 28px rgba(192,57,43,0.18); transform: translateY(-2px); }
     .bsi-btn-secondary {
       background: transparent; color: var(--ink); border: 1.5px solid var(--line);
       font-weight: 600; border-radius: 8px; transition: background .15s ease;
@@ -127,8 +133,18 @@ const Tokens = () => (
   `}</style>
 );
 
-function formatVND(n) { return isNaN(n) ? "—" : Math.round(n).toLocaleString("vi-VN") + " đ"; }
+function formatVND(n) { return isNaN(n) ? "—" : Math.round(n).toLocaleString("vi-VN") + "\u00a0đ"; }
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+function downloadSampleFile(type) {
+  const isOrder = type === "orders";
+  const data = isOrder
+    ? [["Mã Đơn Hàng", "Ngày Đặt Hàng", "Tên Sản Phẩm", "Mã Sản Phẩm", "Thương Hiệu", "Kênh Bán", "Trạng Thái", "Số Lượng", "Giá Bán", "Thành Tiền"]]
+    : [["Mã Sản Phẩm", "Tên Sản Phẩm", "Thương Hiệu", "Giá Niêm Yết", "Đơn Vị"]];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  XLSX.utils.book_append_sheet(wb, ws, "Mẫu");
+  XLSX.writeFile(wb, isOrder ? "mau-don-hang.xlsx" : "mau-danh-sach-san-pham.xlsx");
+}
 
 const PROCESSING_STEPS = [
   "📖 Đang đọc và làm sạch dữ liệu từ tất cả các file...",
@@ -218,16 +234,22 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
         <div className="icon-circle" style={{ background: "#EBF5FB" }}>
           <ShoppingCart size={24} style={{ color: "#2471A3" }} />
         </div>
-        <div>
-          <h3 className="bsi-serif font-semibold text-[17px] leading-tight">Tải lên file Đơn Hàng</h3>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="bsi-serif font-semibold text-[17px] leading-tight">Tải lên file Đơn Hàng</h3>
+            <span className="bsi-badge" style={{ background: "var(--brick-soft)", color: "var(--brick)", fontSize: "11px" }}>● Bắt buộc</span>
+          </div>
           <p className="text-[12.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Từ POS, Shopee, Lazada, TikTok Shop…</p>
         </div>
       </div>
       <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "var(--moss-soft)", border: "1px solid var(--moss)" }}>
         <Info size={14} style={{ color: "var(--moss)", flexShrink: 0 }} />
-        <p className="text-[12px]" style={{ color: "var(--moss)" }}>
+        <p className="text-[12px] flex-1" style={{ color: "var(--moss)" }}>
           Hỗ trợ tối đa <strong>{maxFiles} file</strong>.
         </p>
+        <button onClick={() => downloadSampleFile("orders")} className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline whitespace-nowrap flex-shrink-0" style={{ color: "var(--moss)" }}>
+          <Download size={12} /> Tải file mẫu
+        </button>
       </div>
       {!full && (
         <>
@@ -306,14 +328,19 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
         </div>
         <div>
           <h3 className="bsi-serif font-semibold text-[17px] leading-tight">{title}</h3>
-          <span className="bsi-badge mt-1" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Tệp chuẩn</span>
+          <span className="bsi-badge mt-1" style={{ background: "rgba(32,45,36,0.08)", color: "var(--ink-soft)" }}>Tùy chọn</span>
         </div>
       </div>
-      <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
-        <Info size={14} style={{ color: "var(--amber-warn)", flexShrink: 0 }} />
-        <p className="text-[12px]" style={{ color: "#7D4E00" }}>
-          {hint}
-        </p>
+      <div className="p-2.5 rounded-lg mb-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
+        <div className="flex items-start gap-2">
+          <Info size={14} style={{ color: "var(--amber-warn)", flexShrink: 0, marginTop: 1 }} />
+          <p className="text-[12px] flex-1" style={{ color: "#7D4E00" }}>
+            {hint}
+          </p>
+        </div>
+        <button onClick={() => downloadSampleFile("catalog")} className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline mt-1.5 pl-5" style={{ color: "var(--amber-warn)" }}>
+          <Download size={12} /> Tải file mẫu danh sách sản phẩm (.xlsx)
+        </button>
       </div>
       {!fileState ? (
         <>
@@ -352,7 +379,7 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
 }
 
 /* ============================== STAT CARD MỚI (icon + màu traffic light + font lớn) ============================== */
-function StatCard({ label, value, sub, tone = "ink", icon: IconComp, iconBg, iconColor }) {
+function StatCard({ label, value, sub, tone = "ink", icon: IconComp, iconBg, iconColor, onClick, clickHint }) {
   const colorMap = {
     ink: "var(--ink)",
     brass: "var(--brass)",
@@ -375,7 +402,13 @@ function StatCard({ label, value, sub, tone = "ink", icon: IconComp, iconBg, ico
     amber: "var(--amber-warn-soft)",
   };
   return (
-    <div className="bsi-card bsi-card-hover p-4 flex items-center gap-4" style={{ borderColor: cardBorderMap[tone], background: cardBgMap[tone] }}>
+    <div
+      className={`bsi-card bsi-card-hover p-4 flex items-center gap-4${onClick ? " bsi-card-clickable" : ""}`}
+      style={{ borderColor: cardBorderMap[tone], background: cardBgMap[tone] }}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+    >
       {IconComp && (
         <div className="icon-circle" style={{ background: iconBg || "rgba(32,45,36,0.08)" }}>
           <IconComp size={26} style={{ color: iconColor || colorMap[tone] }} />
@@ -385,6 +418,7 @@ function StatCard({ label, value, sub, tone = "ink", icon: IconComp, iconBg, ico
         <p className="stat-label mb-1" style={{ color: colorMap[tone] }}>{label}</p>
         <p className="stat-num bsi-serif" style={{ color: colorMap[tone] }}>{value}</p>
         {sub && <p className="stat-sub" style={{ color: "var(--ink-soft)" }}>{sub}</p>}
+        {clickHint && onClick && <p className="stat-sub font-semibold mt-1" style={{ color: colorMap[tone], opacity: 0.75 }}>{clickHint}</p>}
       </div>
     </div>
   );
@@ -454,6 +488,7 @@ export default function DataIntegrationTool() {
   const [activeTab, setActiveTab] = useState("overview");
   const [parseError, setParseError] = useState("");
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showGuide, setShowGuide] = useState(true);
 
   // Manual Confirmations state
   const [manualConfirmations, setManualConfirmations] = useState(new Map());
@@ -642,13 +677,15 @@ export default function DataIntegrationTool() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => setShowConfigModal(true)} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-4 py-2.5">
-              <Settings size={15} />
-              <span>Cấu hình:</span>
-              <span className="font-bold" style={{ color: "var(--brass)" }}>
-                {activePresetId !== "custom" ? PRESETS[activePresetId].emoji + " " + PRESETS[activePresetId].name.split("(")[0].trim() : "⚙️ Tùy chỉnh"}
-              </span>
-            </button>
+            {step !== "results" && (
+              <button onClick={() => setShowConfigModal(true)} className="bsi-btn-secondary flex items-center gap-1.5 text-[13px] px-4 py-2.5">
+                <Settings size={15} />
+                <span>Cấu hình:</span>
+                <span className="font-bold" style={{ color: "var(--brass)" }}>
+                  {activePresetId !== "custom" ? PRESETS[activePresetId].emoji + " " + PRESETS[activePresetId].name.split("(")[0].trim() : "⚙️ Tùy chỉnh"}
+                </span>
+              </button>
+            )}
             {step === "results" && (
               <>
                 <button onClick={exportSummaryFile} className="bsi-btn-cta flex items-center gap-2 px-4 py-2.5">
@@ -787,35 +824,46 @@ export default function DataIntegrationTool() {
           <>
             {/* Hướng dẫn nhanh */}
             <div className="bsi-card p-5 mb-6" style={{ background: "linear-gradient(135deg, #EBF5FB 0%, #E8F8F5 100%)", borderColor: "#AED6F1" }}>
-              <h2 className="font-bold text-[16px] mb-3 flex items-center gap-2">
-                <Sparkles size={18} style={{ color: "#2471A3" }} />
-                Hướng Dẫn Sử Dụng Nhanh
-              </h2>
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex items-start gap-3 flex-1">
-                  <div className="step-badge bg-blue-600 text-white">1</div>
-                  <div>
-                    <p className="font-semibold text-[14px]">📦 Tải file đơn hàng</p>
-                    <p className="text-[12.5px] text-gray-600 mt-0.5">Từ POS, Shopee, TikTok Shop, Lazada…</p>
-                  </div>
-                </div>
-                <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
-                <div className="flex items-start gap-3 flex-1">
-                  <div className="step-badge" style={{ background: "var(--brass)" }}>2</div>
-                  <div>
-                    <p className="font-semibold text-[14px]">📋 Tải danh sách sản phẩm gốc</p>
-                    <p className="text-[12.5px] text-gray-600 mt-0.5">Không bắt buộc — giúp kết quả chính xác hơn</p>
-                  </div>
-                </div>
-                <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
-                <div className="flex items-start gap-3 flex-1">
-                  <div className="step-badge" style={{ background: "var(--moss)" }}>3</div>
-                  <div>
-                    <p className="font-semibold text-[14px]">🚀 Bấm Kiểm Tra</p>
-                    <p className="text-[12.5px] text-gray-600 mt-0.5">Hệ thống tự động làm mọi thứ!</p>
-                  </div>
-                </div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-bold text-[16px] flex items-center gap-2">
+                  <Sparkles size={18} style={{ color: "#2471A3" }} />
+                  Hướng Dẫn Sử Dụng Nhanh
+                </h2>
+                <button
+                  onClick={() => setShowGuide(g => !g)}
+                  className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition hover:bg-blue-100"
+                  style={{ color: "#2471A3" }}
+                >
+                  {showGuide ? <><ChevronUp size={14} /> Thu gọn</> : <><ChevronDown size={14} /> Mở rộng</>}
+                </button>
               </div>
+              {showGuide && (
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className="step-badge bg-blue-600 text-white">1</div>
+                    <div>
+                      <p className="font-semibold text-[14px]">📦 Tải file đơn hàng</p>
+                      <p className="text-[12.5px] text-gray-600 mt-0.5">Từ POS, Shopee, TikTok Shop, Lazada…</p>
+                    </div>
+                  </div>
+                  <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className="step-badge" style={{ background: "var(--brass)" }}>2</div>
+                    <div>
+                      <p className="font-semibold text-[14px]">📋 Tải danh sách sản phẩm gốc</p>
+                      <p className="text-[12.5px] text-gray-600 mt-0.5">Không bắt buộc — giúp kết quả chính xác hơn</p>
+                    </div>
+                  </div>
+                  <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className="step-badge" style={{ background: "var(--moss)" }}>3</div>
+                    <div>
+                      <p className="font-semibold text-[14px]">🚀 Bấm Kiểm Tra</p>
+                      <p className="text-[12.5px] text-gray-600 mt-0.5">Hệ thống tự động làm mọi thứ!</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {parseError && (
@@ -839,13 +887,21 @@ export default function DataIntegrationTool() {
             </div>
 
             <div className="flex flex-col items-center gap-3">
-              <button onClick={processAll} disabled={!readyToProcess} className="bsi-btn-cta flex items-center gap-3 px-8 py-4 text-[17px]">
+              <button
+                onClick={readyToProcess ? processAll : undefined}
+                disabled={!readyToProcess}
+                className={`${readyToProcess ? "bsi-btn-cta" : "bsi-btn-disabled-gray"} flex items-center gap-3 px-8 py-4 text-[17px]`}
+              >
                 🚀 Bắt Đầu Kiểm Tra & Tổng Hợp Dữ Liệu
                 <ArrowRight size={20} />
               </button>
-              {readyToProcess && (
+              {readyToProcess ? (
                 <p className="text-[12.5px] font-medium" style={{ color: "var(--moss)" }}>
                   ✅ Sẵn sàng! Đã tải {orderFiles.length} file đơn hàng{catalogFile ? " + 1 danh sách sản phẩm" : ""}.
+                </p>
+              ) : (
+                <p className="text-[12.5px] font-medium" style={{ color: "var(--ink-soft)" }}>
+                  ← Hãy tải ít nhất 1 file đơn hàng để bắt đầu
                 </p>
               )}
             </div>
@@ -885,20 +941,26 @@ export default function DataIntegrationTool() {
                 <span className="bsi-stamp">✓ ĐÃ KIỂM TRA XONG</span>
                 <div>
                   <p className="font-semibold text-[14px]" style={{ color: "var(--moss)" }}>
-                    {result.stats.totalRows} đơn hàng từ {orderFiles.length} nguồn
+                    {result.stats.totalRows.toLocaleString()} đơn hàng từ {orderFiles.length} nguồn
                   </p>
                   <p className="text-[12px]" style={{ color: "var(--ink-soft)" }}>
                     {result.stats.catalogSize > 0 ? `${result.stats.catalogSize} sản phẩm trong danh sách gốc` : "Không có danh sách sản phẩm gốc"}
                   </p>
+                  <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                    <span className="text-[11.5px] font-semibold" style={{ color: "var(--moss)" }}>🔒 Chế độ đã kiểm tra:</span>
+                    <span className="bsi-badge" style={{ background: "white", color: "var(--moss)", fontSize: "11px" }}>
+                      {activePresetId !== "custom" ? PRESETS[activePresetId].emoji + " " + PRESETS[activePresetId].name.split("(")[0].trim() : "⚙️ Tùy chỉnh"}
+                    </span>
+                    <span className="bsi-badge" style={{ background: "var(--navy)", color: "#fff", fontSize: "11px" }}>
+                      {result.strategyLabel}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="bsi-badge" style={{ background: "white", color: "var(--moss)" }}>
-                  {activePresetId !== "custom" ? PRESETS[activePresetId].emoji + " " + PRESETS[activePresetId].name.split("(")[0].trim() : "⚙️ Tùy chỉnh"}
-                </span>
-                <span className="bsi-badge" style={{ background: "var(--navy)", color: "#fff" }}>
-                  {result.strategyLabel}
-                </span>
+              <div className="flex flex-col items-end gap-2">
+                <button onClick={reset} className="bsi-btn-secondary flex items-center gap-1.5 text-[12.5px] px-3.5 py-2">
+                  <RotateCcw size={13} /> 🔁 Chạy lại với cấu hình khác
+                </button>
               </div>
             </div>
 
@@ -930,6 +992,8 @@ export default function DataIntegrationTool() {
                 icon={result.issues.length === 0 ? ShieldCheck : CircleAlert}
                 iconBg={result.issues.length === 0 ? "var(--moss-soft)" : "var(--brick-soft)"}
                 iconColor={result.issues.length === 0 ? "var(--moss)" : "var(--brick)"}
+                onClick={result.issues.length > 0 ? () => setActiveTab("issues") : undefined}
+                clickHint={result.issues.length > 0 ? "→ Nhấn để xem chi tiết" : undefined}
               />
               <StatCard
                 label="💰 Doanh Thu Thực Tế"
@@ -966,13 +1030,14 @@ export default function DataIntegrationTool() {
                     <TrendingUp size={18} style={{ color: "var(--moss)" }} />
                     Doanh Thu Theo Kênh Bán Hàng
                   </h3>
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={result.revenueByChannel} margin={{ left: 4, right: 8 }}>
+                  <ResponsiveContainer width="100%" height={265}>
+                    <BarChart data={result.revenueByChannel} margin={{ left: 4, right: 8, bottom: 8 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
                       <XAxis dataKey="kenh" tick={{ fontSize: 12 }} stroke="var(--ink-soft)" />
                       <YAxis tick={{ fontSize: 11 }} stroke="var(--ink-soft)" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v) => formatVND(v)} contentStyle={{ fontSize: 13, borderRadius: 8, borderColor: "var(--line)" }} />
-                      <Bar dataKey="doanhThu" radius={[5, 5, 0, 0]}>
+                      <Tooltip formatter={(v) => [formatVND(v), "Doanh thu"]} contentStyle={{ fontSize: 13, borderRadius: 8, borderColor: "var(--line)" }} />
+                      <Legend formatter={() => "Doanh thu (VNĐ)"} iconType="square" wrapperStyle={{ fontSize: 12, paddingTop: 6 }} />
+                      <Bar dataKey="doanhThu" name="Doanh thu" radius={[5, 5, 0, 0]}>
                         {result.revenueByChannel.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                       </Bar>
                     </BarChart>
@@ -987,18 +1052,19 @@ export default function DataIntegrationTool() {
                     <BarChart data={result.topProducts} layout="vertical" margin={{ left: 4, right: 16 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" horizontal={false} />
                       <XAxis type="number" tick={{ fontSize: 11 }} stroke="var(--ink-soft)" allowDecimals={false} />
-                      <YAxis type="category" dataKey="ten" width={160} tick={{ fontSize: 11 }} stroke="var(--ink-soft)" />
-                      <Tooltip contentStyle={{ fontSize: 13, borderRadius: 8, borderColor: "var(--line)" }} />
-                      <Bar dataKey="soLuong" radius={[0, 5, 5, 0]} fill="var(--brass)" />
+                      <YAxis type="category" dataKey="ten" width={130} tick={{ fontSize: 11 }} stroke="var(--ink-soft)"
+                        tickFormatter={(v) => v && v.length > 15 ? v.slice(0, 15) + "…" : v} />
+                      <Tooltip formatter={(v) => [v, "Số lượng bán"]} labelFormatter={(label) => `📦 ${label}`} contentStyle={{ fontSize: 13, borderRadius: 8, borderColor: "var(--line)" }} />
+                      <Bar dataKey="soLuong" name="Số lượng" radius={[0, 5, 5, 0]} fill="var(--brass)" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             )}
 
-            {/* TAB 2: KIỂM TRA LỖI (GIAO DIỆN THẺ DỄ ĐỌC) */}
+            {/* TAB 2: KIỂM TRA LỖI (GIAO DIỆN BẢNG TỐI ƯU KÍCH THƯỚC) */}
             {activeTab === "issues" && (
-              <div className="bsi-card overflow-hidden">
+              <div className="bsi-card overflow-hidden border border-gray-200 rounded-xl bg-white shadow-sm w-full">
                 {result.issues.length === 0 ? (
                   <div className="p-10 text-center">
                     <div className="text-5xl mb-3">🎉</div>
@@ -1010,73 +1076,92 @@ export default function DataIntegrationTool() {
                     </p>
                   </div>
                 ) : (
-                  <div className="p-4 bg-gray-50/50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {result.integrated
-                        .filter((r) => r.issues.length > 0)
-                        .map((r, i) => (
-                          <div
-                            key={i}
-                            className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between gap-3"
-                          >
-                            {/* 1. THÔNG TIN SẢN PHẨM VÀ NGUỒN FILE */}
-                            <div className="border-b border-gray-100 pb-2.5">
-                              <div className="flex justify-between items-start gap-2 mb-1">
-                                <h4 className="font-bold text-gray-900 text-base leading-snug">
-                                  {r.ten_sp || "Sản phẩm chưa rõ tên"}
-                                </h4>
-                                <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 shrink-0 border border-gray-200">
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full text-left text-sm table-fixed border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100/80 text-gray-700 uppercase text-[11px] tracking-wider font-bold border-b border-gray-200">
+                          <th className="p-3 w-[5%] text-center">STT</th>
+                          <th className="p-3 w-[15%]">Mã Đơn</th>
+                          <th className="p-3 w-[25%]">Tên Sản Phẩm</th>
+                          <th className="p-3 w-[15%]">Nguồn</th>
+                          <th className="p-3 w-[15%]">Phân Loại Lỗi</th>
+                          <th className="p-3 w-[25%]">Chi Tiết Lỗi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white">
+                        {result.integrated
+                          .filter((r) => r.issues && r.issues.length > 0)
+                          .map((r, i) => (
+                            <tr key={r.id || `${r.ma_don}-${i}`} className="hover:bg-gray-50/80 transition-colors">
+                              {/* STT */}
+                              <td className="p-3 text-center text-gray-400 font-mono text-xs align-top pt-3.5">
+                                {i + 1}
+                              </td>
+
+                              {/* Mã Đơn */}
+                              <td className="p-3 font-mono font-bold text-gray-800 text-xs align-top pt-3.5 break-all">
+                                {r.ma_don || "—"}
+                              </td>
+
+                              {/* Tên Sản Phẩm */}
+                              <td className="p-3 font-semibold text-gray-900 text-xs leading-relaxed align-top pt-3.5 break-words">
+                                {r.ten_sp || "Sản phẩm chưa rõ tên"}
+                              </td>
+
+                              {/* Nguồn */}
+                              <td className="p-3 align-top pt-3">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium text-[11px] border border-gray-200 break-all">
                                   📂 {r.nguon}
                                 </span>
-                              </div>
-                              <p className="text-xs text-gray-500 font-mono">
-                                Mã đơn: <span className="font-semibold text-gray-700">{r.ma_don || "—"}</span>
-                              </p>
-                            </div>
+                              </td>
 
-                            {/* 2. PHÂN LOẠI LỖI (BADGE NỔI BẬT) */}
-                            <div className="flex flex-wrap gap-2">
-                              {[...new Set(r.issues.map((iss) => iss.group))].map((g) => {
-                                const label = GROUP_LABELS[g] || g;
-                                let badgeStyle = "bg-rose-100 text-rose-900 border-rose-300";
-                                let icon = "⚠️";
+                              {/* Phân Loại Lỗi */}
+                              <td className="p-3 align-top pt-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {[...new Set(r.issues.map((iss) => iss.group))].map((g) => {
+                                    const label = GROUP_LABELS[g] || g;
+                                    let badgeStyle = "bg-rose-100 text-rose-900 border-rose-300";
+                                    let icon = "⚠️";
 
-                                if (label.includes("Giá") || label.includes("Tiền")) {
-                                  badgeStyle = "bg-amber-100 text-amber-900 border-amber-300";
-                                  icon = "🏷️";
-                                } else if (label.includes("Ý Nghĩa") || label.includes("Chuẩn")) {
-                                  badgeStyle = "bg-blue-100 text-blue-900 border-blue-300";
-                                  icon = "🚚";
-                                } else if (label.includes("Ngày")) {
-                                  badgeStyle = "bg-purple-100 text-purple-900 border-purple-300";
-                                  icon = "📅";
-                                }
+                                    if (label.includes("Giá") || label.includes("Tiền")) {
+                                      badgeStyle = "bg-amber-100 text-amber-900 border-amber-300";
+                                      icon = "🏷️";
+                                    } else if (label.includes("Ý Nghĩa") || label.includes("Chuẩn")) {
+                                      badgeStyle = "bg-blue-100 text-blue-900 border-blue-300";
+                                      icon = "🚚";
+                                    } else if (label.includes("Ngày")) {
+                                      badgeStyle = "bg-purple-100 text-purple-900 border-purple-300";
+                                      icon = "📅";
+                                    }
 
-                                return (
-                                  <span
-                                    key={g}
-                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border ${badgeStyle}`}
-                                  >
-                                    <span>{icon}</span>
-                                    <span>{label}</span>
-                                  </span>
-                                );
-                              })}
-                            </div>
+                                    return (
+                                      <span
+                                        key={g}
+                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${badgeStyle}`}
+                                      >
+                                        <span>{icon}</span>
+                                        <span>{label}</span>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </td>
 
-                            {/* 3. CHI TIẾT NỘI DUNG LỖI */}
-                            <div className="bg-red-50/70 border border-red-100 rounded-lg p-3">
-                              <div className="text-sm text-gray-800 leading-relaxed font-medium">
-                                <IssueList issues={r.issues} />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
+                              {/* Chi Tiết Lỗi */}
+                              <td className="p-3 align-top pt-2.5">
+                                <div className="bg-red-50/60 border border-red-100 rounded-lg p-2.5 break-words">
+                                  <IssueList issues={r.issues} />
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
             )}
+
             {/* TAB 3: CẦN BẠN XEM */}
             {activeTab === "manual_confirm" && (
               <div className="bsi-card p-5">
