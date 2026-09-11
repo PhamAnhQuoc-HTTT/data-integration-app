@@ -237,7 +237,6 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="bsi-serif font-semibold text-[17px] leading-tight">Tải lên file Đơn Hàng</h3>
-            <span className="bsi-badge" style={{ background: "var(--brick-soft)", color: "var(--brick)", fontSize: "11px" }}>● Bắt buộc</span>
           </div>
           <p className="text-[12.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>Từ POS, Shopee, Lazada, TikTok Shop…</p>
         </div>
@@ -247,9 +246,6 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
         <p className="text-[12px] flex-1" style={{ color: "var(--moss)" }}>
           Hỗ trợ tối đa <strong>{maxFiles} file</strong>.
         </p>
-        <button onClick={() => downloadSampleFile("orders")} className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline whitespace-nowrap flex-shrink-0" style={{ color: "var(--moss)" }}>
-          <Download size={12} /> Tải file mẫu
-        </button>
       </div>
       {!full && (
         <>
@@ -311,7 +307,7 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
   );
 }
 
-function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, dragOverKey, setDragOverKey, onRemove }) {
+function UploadCard({ tag, icon: Icon = Package, title, subtitle, hint, fileState, onFile, dragKey, dragOverKey, setDragOverKey, onRemove }) {
   const inputId = `bsi-file-${tag}`;
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -321,35 +317,45 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
   }, [onFile, setDragOverKey]);
 
   return (
-    <div className="bsi-card relative p-5 pt-7 bsi-card-hover">
-      <div className="flex items-center gap-2.5 mb-2">
-        <div className="icon-circle" style={{ background: "#FEF9E7" }}>
-          <Package size={24} style={{ color: "var(--brass)" }} />
+    <div className="bsi-card relative p-5 pt-7 bsi-card-hover flex flex-col h-full justify-between">
+      <div>
+        {/* Tiêu đề & Mô tả dưới tiêu đề */}
+        <div className="flex items-start gap-2.5 mb-2">
+          <div className="icon-circle flex-shrink-0" style={{ background: "#FEF9E7" }}>
+            <Icon size={24} style={{ color: "var(--brass)" }} />
+          </div>
+          <div>
+            <h3 className="bsi-serif font-semibold text-[17px] leading-tight">{title}</h3>
+            {subtitle && (
+              <p className="text-[12.5px] mt-1" style={{ color: "var(--ink-soft)" }}>
+                {subtitle}
+              </p>
+            )}
+          </div>
         </div>
-        <div>
-          <h3 className="bsi-serif font-semibold text-[17px] leading-tight">{title}</h3>
-          <span className="bsi-badge mt-1" style={{ background: "rgba(32,45,36,0.08)", color: "var(--ink-soft)" }}>Tùy chọn</span>
-        </div>
+
+        {/* Ô màu ghi chú số lượng file / hướng dẫn */}
+        {hint && (
+          <div className="p-2.5 rounded-lg mb-3 mt-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
+            <div className="flex items-start gap-2">
+              <Info size={14} style={{ color: "var(--amber-warn)", flexShrink: 0, marginTop: 1 }} />
+              <p className="text-[12px] flex-1" style={{ color: "#7D4E00" }}>
+                {hint}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
-      <div className="p-2.5 rounded-lg mb-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
-        <div className="flex items-start gap-2">
-          <Info size={14} style={{ color: "var(--amber-warn)", flexShrink: 0, marginTop: 1 }} />
-          <p className="text-[12px] flex-1" style={{ color: "#7D4E00" }}>
-            {hint}
-          </p>
-        </div>
-        <button onClick={() => downloadSampleFile("catalog")} className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline mt-1.5 pl-5" style={{ color: "var(--amber-warn)" }}>
-          <Download size={12} /> Tải file mẫu danh sách sản phẩm (.xlsx)
-        </button>
-      </div>
+
+      {/* Khu vực Dropzone */}
       {!fileState ? (
         <>
           <label htmlFor={inputId}
-            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-2 py-8 px-3 cursor-pointer text-center`}
+            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-2 py-8 px-3 cursor-pointer text-center flex-1`}
             onDragOver={(e) => { e.preventDefault(); setDragOverKey(dragKey); }}
             onDragLeave={() => setDragOverKey(null)} onDrop={handleDrop}>
             <UploadCloud size={28} style={{ color: "var(--brass)" }} />
-            <span className="text-[14px] font-semibold">Kéo thả hoặc bấm để chọn Danh Sách Sản Phẩm Gốc</span>
+            <span className="text-[14px] font-semibold">Kéo thả hoặc bấm để chọn {title}</span>
             <span className="text-[12px] bsi-mono" style={{ color: "var(--ink-soft)" }}>Định dạng: .csv · .xlsx · .xls</span>
           </label>
           <input id={inputId} type="file" accept=".csv,.xlsx,.xls" className="hidden"
@@ -363,13 +369,19 @@ function UploadCard({ tag, icon: Icon, title, hint, fileState, onFile, dragKey, 
               <span className="text-[13px] font-semibold truncate">{fileState.fileName}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[12px] font-medium bsi-mono px-2 py-0.5 rounded" style={{ background: "white", color: "var(--moss)" }}>{fileState.dataRows.length} sản phẩm</span>
-              <button onClick={onRemove} aria-label="Xóa tệp" className="p-1 rounded hover:bg-red-100 transition"><Trash2 size={15} style={{ color: "var(--brick)" }} /></button>
+              <span className="text-[12px] font-medium bsi-mono px-2 py-0.5 rounded" style={{ background: "white", color: "var(--moss)" }}>
+                {fileState.dataRows?.length || 0} sản phẩm
+              </span>
+              <button onClick={onRemove} aria-label="Xóa tệp" className="p-1 rounded hover:bg-red-100 transition">
+                <Trash2 size={15} style={{ color: "var(--brick)" }} />
+              </button>
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-2">
-            {Object.entries(fileState.mapping).filter(([k, i]) => k !== "branchColumns" && i >= 0).map(([f]) => (
-              <span key={f} className="bsi-badge" style={{ background: "white", color: "var(--ink-soft)", fontSize: "11px" }}>{FIELD_LABELS[f]}</span>
+            {fileState.mapping && Object.entries(fileState.mapping).filter(([k, i]) => k !== "branchColumns" && i >= 0).map(([f]) => (
+              <span key={f} className="bsi-badge" style={{ background: "white", color: "var(--ink-soft)", fontSize: "11px" }}>
+                {FIELD_LABELS?.[f] || f}
+              </span>
             ))}
           </div>
         </div>
@@ -822,7 +834,7 @@ export default function DataIntegrationTool() {
         {/* STEP: UPLOAD */}
         {step === "upload" && (
           <>
-            {/* Hướng dẫn nhanh */}
+            {/* Khung Hướng Dẫn Sử Dụng Nhanh */}
             <div className="bsi-card p-5 mb-6" style={{ background: "linear-gradient(135deg, #EBF5FB 0%, #E8F8F5 100%)", borderColor: "#AED6F1" }}>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-[16px] flex items-center gap-2">
@@ -838,28 +850,19 @@ export default function DataIntegrationTool() {
                 </button>
               </div>
               {showGuide && (
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="step-badge bg-blue-600 text-white">1</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white/60 p-3 rounded-lg border border-blue-100/80 flex items-start gap-3">
+                    <span className="text-xl">📁</span>
                     <div>
-                      <p className="font-semibold text-[14px]">📦 Tải file đơn hàng</p>
-                      <p className="text-[12.5px] text-gray-600 mt-0.5">Từ POS, Shopee, TikTok Shop, Lazada…</p>
+                      <p className="font-semibold text-[13.5px] text-gray-800">Tải Lên File Dữ Liệu</p>
+                      <p className="text-[12px] text-gray-600 mt-0.5">Thêm các file đơn hàng bán lẻ và file danh sách sản phẩm chuẩn vào khu vực tương ứng.</p>
                     </div>
                   </div>
-                  <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="step-badge" style={{ background: "var(--brass)" }}>2</div>
+                  <div className="bg-white/60 p-3 rounded-lg border border-blue-100/80 flex items-start gap-3">
+                    <span className="text-xl">🚀</span>
                     <div>
-                      <p className="font-semibold text-[14px]">📋 Tải danh sách sản phẩm gốc</p>
-                      <p className="text-[12.5px] text-gray-600 mt-0.5">Không bắt buộc — giúp kết quả chính xác hơn</p>
-                    </div>
-                  </div>
-                  <div className="hidden md:flex items-center text-gray-300 text-2xl">→</div>
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="step-badge" style={{ background: "var(--moss)" }}>3</div>
-                    <div>
-                      <p className="font-semibold text-[14px]">🚀 Bấm Kiểm Tra</p>
-                      <p className="text-[12.5px] text-gray-600 mt-0.5">Hệ thống tự động làm mọi thứ!</p>
+                      <p className="font-semibold text-[13.5px] text-gray-800">Kiểm Tra & Đối Soát</p>
+                      <p className="text-[12px] text-gray-600 mt-0.5">Nhấn nút bên dưới để hệ thống tự động làm sạch, chuẩn hóa và phát hiện lỗi dữ liệu.</p>
                     </div>
                   </div>
                 </div>
@@ -876,16 +879,47 @@ export default function DataIntegrationTool() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
-              <OrdersDropzone files={orderFiles} onAddFile={addOrderFile} onRemoveFile={removeOrderFile}
-                onUpdateChannelLabel={updateChannelLabel}
-                maxFiles={MAX_ORDER_FILES} dragKey="orders" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
-              <UploadCard tag="catalog" icon={Package} title="Danh Sách Sản Phẩm Gốc"
-                hint="Tải lên file danh sách sản phẩm của cửa hàng bạn để hệ thống so sánh và phát hiện lỗi chính xác hơn. Nếu không có, hệ thống vẫn hoạt động bình thường."
-                fileState={catalogFile} onFile={setCatalog} onRemove={() => setCatalogFile(null)}
-                dragKey="catalog" dragOverKey={dragOverKey} setDragOverKey={setDragOverKey} />
+            {/* KHU VỰC TẢI FILE GỘP CHUNG (CONTAINER CHÍNH) */}
+            <div className="bsi-card p-6 mb-6 bg-white border border-gray-200 rounded-xl shadow-sm">
+              <div className="mb-4 pb-3 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-[16px] text-gray-800">Tải Lên Dữ Liệu</h3>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Phần 1: File đơn hàng */}
+                <OrdersDropzone
+                  files={orderFiles}
+                  onAddFile={addOrderFile}
+                  onRemoveFile={removeOrderFile}
+                  onUpdateChannelLabel={updateChannelLabel}
+                  maxFiles={MAX_ORDER_FILES}
+                  subtitle="Từ POS, Shopee, Lazada, TikTok Shop..."
+                  hint="Hỗ trợ tối đa 4 file."
+                  dragKey="orders"
+                  dragOverKey={dragOverKey}
+                  setDragOverKey={setDragOverKey}
+                />
+
+                {/* Phần 2: Danh sách sản phẩm gốc */}
+                <UploadCard
+                  tag="catalog"
+                  icon={Package}
+                  title="Danh Sách Sản Phẩm Gốc"
+                  subtitle="File danh sách sản phẩm chứa thông tin của sản phẩm."
+                  hint="Tải lên 1 file danh sách chuẩn."
+                  fileState={catalogFile}
+                  onFile={setCatalog}
+                  onRemove={() => setCatalogFile(null)}
+                  dragKey="catalog"
+                  dragOverKey={dragOverKey}
+                  setDragOverKey={setDragOverKey}
+                />
+              </div>
             </div>
 
+            {/* NÚT BẮT ĐẦU & TRẠNG THÁI */}
             <div className="flex flex-col items-center gap-3">
               <button
                 onClick={readyToProcess ? processAll : undefined}
@@ -895,13 +929,23 @@ export default function DataIntegrationTool() {
                 🚀 Bắt Đầu Kiểm Tra & Tổng Hợp Dữ Liệu
                 <ArrowRight size={20} />
               </button>
-              {readyToProcess ? (
-                <p className="text-[12.5px] font-medium" style={{ color: "var(--moss)" }}>
-                  ✅ Sẵn sàng! Đã tải {orderFiles.length} file đơn hàng{catalogFile ? " + 1 danh sách sản phẩm" : ""}.
+
+              {/* Thông báo trạng thái động */}
+              {orderFiles.length === 0 && !catalogFile ? (
+                <p className="text-[12.5px] font-medium text-gray-500">
+                  Vui lòng tải lên file đơn hàng và danh sách sản phẩm gốc để bắt đầu
+                </p>
+              ) : orderFiles.length === 0 ? (
+                <p className="text-[12.5px] font-medium text-amber-600">
+                  ⚠️ Thiếu file đơn hàng! Vui lòng tải thêm file đơn hàng.
+                </p>
+              ) : !catalogFile ? (
+                <p className="text-[12.5px] font-medium text-amber-600">
+                  ⚠️ Thiếu danh sách sản phẩm gốc! Vui lòng tải thêm file gốc để đối soát.
                 </p>
               ) : (
-                <p className="text-[12.5px] font-medium" style={{ color: "var(--ink-soft)" }}>
-                  ← Hãy tải ít nhất 1 file đơn hàng để bắt đầu
+                <p className="text-[12.5px] font-medium" style={{ color: "var(--moss)" }}>
+                  ✓ Đã tải đủ {orderFiles.length} file đơn hàng và danh sách sản phẩm gốc. Sẵn sàng kiểm tra!
                 </p>
               )}
             </div>
