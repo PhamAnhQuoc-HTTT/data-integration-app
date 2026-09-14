@@ -4,13 +4,13 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from "recharts";
 import {
-  UploadCloud, Layers, Package, CheckCircle2, AlertTriangle,
+  UploadCloud, Package, CheckCircle2, AlertTriangle,
   RotateCcw, Download, BarChart3, Table2, ListChecks, Loader2, ArrowRight, Trash2,
   Settings, ShieldCheck, Check, X, Sliders, FileText,
-  Target, Shield, Zap, Info, ChevronDown, ChevronUp, HelpCircle,
-  ShoppingCart, Banknote, TrendingUp, Bell, Calendar, Tag,
+  Target, Shield, Zap, Info, ChevronDown, ChevronUp,
+  ShoppingCart, Banknote, TrendingUp,
   MousePointerClick, ThumbsUp, ThumbsDown, BookOpen, Sparkles,
-  ClipboardList, Eye, BadgeCheck, CircleAlert, Layers3,
+  Eye, BadgeCheck, CircleAlert,
 } from "lucide-react";
 import { detectFields, FIELD_LABELS } from "./logic/fieldMapping";
 import { runPipeline } from "./logic/pipeline";
@@ -229,7 +229,7 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
   }, [onAddFile, setDragOverKey, full]);
 
   return (
-    <div className="bsi-card relative p-5 pt-7 bsi-card-hover">
+    <div className="bsi-card relative p-5 pt-7 bsi-card-hover flex flex-col h-full">
       <div className="flex items-center gap-2.5 mb-2">
         <div className="icon-circle" style={{ background: "#EBF5FB" }}>
           <ShoppingCart size={24} style={{ color: "#2471A3" }} />
@@ -250,7 +250,7 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
       {!full && (
         <>
           <label htmlFor={inputId}
-            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-2 py-8 px-3 cursor-pointer text-center`}
+            className={`bsi-dropzone ${dragOverKey === dragKey ? "drag" : ""} flex flex-col items-center justify-center gap-2 py-8 px-3 cursor-pointer text-center flex-1`}
             onDragOver={(e) => { e.preventDefault(); setDragOverKey(dragKey); }}
             onDragLeave={() => setDragOverKey(null)} onDrop={handleDrop}>
             <UploadCloud size={28} style={{ color: "var(--brass)" }} />
@@ -317,35 +317,31 @@ function UploadCard({ tag, icon: Icon = Package, title, subtitle, hint, fileStat
   }, [onFile, setDragOverKey]);
 
   return (
-    <div className="bsi-card relative p-5 pt-7 bsi-card-hover flex flex-col h-full justify-between">
-      <div>
-        {/* Tiêu đề & Mô tả dưới tiêu đề */}
-        <div className="flex items-start gap-2.5 mb-2">
-          <div className="icon-circle flex-shrink-0" style={{ background: "#FEF9E7" }}>
-            <Icon size={24} style={{ color: "var(--brass)" }} />
-          </div>
-          <div>
-            <h3 className="bsi-serif font-semibold text-[17px] leading-tight">{title}</h3>
-            {subtitle && (
-              <p className="text-[12.5px] mt-1" style={{ color: "var(--ink-soft)" }}>
-                {subtitle}
-              </p>
-            )}
-          </div>
+    <div className="bsi-card relative p-5 pt-7 bsi-card-hover flex flex-col h-full">
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="icon-circle flex-shrink-0" style={{ background: "#FEF9E7" }}>
+          <Icon size={24} style={{ color: "var(--brass)" }} />
         </div>
-
-        {/* Ô màu ghi chú số lượng file / hướng dẫn */}
-        {hint && (
-          <div className="p-2.5 rounded-lg mb-3 mt-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
-            <div className="flex items-start gap-2">
-              <Info size={14} style={{ color: "var(--amber-warn)", flexShrink: 0, marginTop: 1 }} />
-              <p className="text-[12px] flex-1" style={{ color: "#7D4E00" }}>
-                {hint}
-              </p>
-            </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="bsi-serif font-semibold text-[17px] leading-tight">{title}</h3>
           </div>
-        )}
+          {subtitle && (
+            <p className="text-[12.5px] mt-0.5" style={{ color: "var(--ink-soft)" }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
       </div>
+
+      {hint && (
+        <div className="flex items-center gap-2 p-2.5 rounded-lg mb-3" style={{ background: "var(--amber-warn-soft)", border: "1px solid var(--amber-warn)" }}>
+          <Info size={14} style={{ color: "var(--amber-warn)", flexShrink: 0 }} />
+          <p className="text-[12px] flex-1" style={{ color: "#7D4E00" }}>
+            {hint}
+          </p>
+        </div>
+      )}
 
       {/* Khu vực Dropzone */}
       {!fileState ? (
@@ -991,7 +987,6 @@ export default function DataIntegrationTool() {
                     {result.stats.catalogSize > 0 ? `${result.stats.catalogSize} sản phẩm trong danh sách gốc` : "Không có danh sách sản phẩm gốc"}
                   </p>
                   <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                    <span className="text-[11.5px] font-semibold" style={{ color: "var(--moss)" }}>🔒 Chế độ đã kiểm tra:</span>
                     <span className="bsi-badge" style={{ background: "white", color: "var(--moss)", fontSize: "11px" }}>
                       {activePresetId !== "custom" ? PRESETS[activePresetId].emoji + " " + PRESETS[activePresetId].name.split("(")[0].trim() : "⚙️ Tùy chỉnh"}
                     </span>
@@ -1003,7 +998,7 @@ export default function DataIntegrationTool() {
               </div>
               <div className="flex flex-col items-end gap-2">
                 <button onClick={reset} className="bsi-btn-secondary flex items-center gap-1.5 text-[12.5px] px-3.5 py-2">
-                  <RotateCcw size={13} /> 🔁 Chạy lại với cấu hình khác
+                  <RotateCcw size={13} /> Chạy lại với cấu hình khác
                 </button>
               </div>
             </div>
@@ -1124,12 +1119,12 @@ export default function DataIntegrationTool() {
                     <table className="w-full text-left text-sm table-fixed border-collapse">
                       <thead>
                         <tr className="bg-gray-100/80 text-gray-700 uppercase text-[11px] tracking-wider font-bold border-b border-gray-200">
-                          <th className="p-3 w-[5%] text-center">STT</th>
-                          <th className="p-3 w-[15%]">Mã Đơn</th>
-                          <th className="p-3 w-[25%]">Tên Sản Phẩm</th>
-                          <th className="p-3 w-[15%]">Nguồn</th>
-                          <th className="p-3 w-[15%]">Phân Loại Lỗi</th>
-                          <th className="p-3 w-[25%]">Chi Tiết Lỗi</th>
+                          <th className="p-3 w-[4%] text-center">STT</th>
+                          <th className="p-3 w-[12%]">Mã Đơn</th>
+                          <th className="p-3 w-[28%]">Tên Sản Phẩm</th>
+                          <th className="p-3 w-[12%]">Nguồn</th>
+                          <th className="p-3 w-[16%]">Phân Loại Lỗi</th>
+                          <th className="p-3 w-[28%]">Chi Tiết Lỗi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200 bg-white">
@@ -1154,14 +1149,14 @@ export default function DataIntegrationTool() {
 
                               {/* Nguồn */}
                               <td className="p-3 align-top pt-3">
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium text-[11px] border border-gray-200 break-all">
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium text-[11px] border border-gray-200 truncate max-w-full" title={r.nguon}>
                                   📂 {r.nguon}
                                 </span>
                               </td>
 
                               {/* Phân Loại Lỗi */}
                               <td className="p-3 align-top pt-3">
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-col gap-1.5">
                                   {[...new Set(r.issues.map((iss) => iss.group))].map((g) => {
                                     const label = GROUP_LABELS[g] || g;
                                     let badgeStyle = "bg-rose-100 text-rose-900 border-rose-300";
@@ -1181,7 +1176,7 @@ export default function DataIntegrationTool() {
                                     return (
                                       <span
                                         key={g}
-                                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${badgeStyle}`}
+                                        className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold border w-fit ${badgeStyle}`}
                                       >
                                         <span>{icon}</span>
                                         <span>{label}</span>
@@ -1465,7 +1460,7 @@ export default function DataIntegrationTool() {
                   </div>
 
                   <div className="p-4 rounded-xl border border-gray-200 bg-white text-[13px] space-y-2.5">
-                    <p className="font-bold text-gray-700 mb-1">📊 Những gì hệ thống đã làm:</p>
+                    <p className="font-bold text-gray-700 mb-1">Những gì hệ thống đã làm:</p>
                     <div className="flex items-start gap-2">
                       <span className="text-[16px] mt-0.5">🚫</span>
                       <p><strong>Loại bỏ doanh thu từ đơn đã hủy:</strong> Phát hiện và gắn cờ <strong className="text-red-700">{formatVND(result.governanceAudit?.cancelledRevenuePrevented || 0)}</strong> từ các đơn hàng có trạng thái Đã hủy / Trả hàng.</p>
@@ -1490,7 +1485,7 @@ export default function DataIntegrationTool() {
                   <Eye size={16} style={{ color: "var(--ink-soft)" }} />
                   <span className="text-[13px] font-semibold">Toàn bộ {result.integrated.length} dòng dữ liệu đã tích hợp</span>
                   <button onClick={exportSummaryFile} className="ml-auto bsi-btn-cta flex items-center gap-2 px-4 py-2 text-[13px]">
-                    <Download size={14} /> ⬇️ Tải Xuống File
+                    <Download size={14} /> Tải Xuống File
                   </button>
                 </div>
                 <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
