@@ -277,10 +277,11 @@ describe("quality rules — 6 groups & severity classification", () => {
     expect(issues.length).toBe(0);
   });
 
-  it("checkStaleData flags cancelled order with stock and price", () => {
+  it("checkStaleData flags cancelled order with stock and price as value conflict", () => {
     const rows = [{ trang_thai: "Đã hủy", so_luong: "5", gia: "100000" }];
     const issues = checkStaleData(rows);
     expect(issues.length).toBe(1);
+    expect(issues[0].group).toBe("value");
   });
 
   it("checkReferentialIntegrity flags UNRESOLVED matchStatus with ma_dinh_danh", () => {

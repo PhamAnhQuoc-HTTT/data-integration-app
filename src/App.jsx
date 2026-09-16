@@ -246,6 +246,14 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
         <p className="text-[12px] flex-1" style={{ color: "var(--moss)" }}>
           Hỗ trợ tối đa <strong>{maxFiles} file</strong>.
         </p>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); downloadSampleFile("orders"); }}
+          className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline whitespace-nowrap flex-shrink-0 px-2 py-1 rounded bg-white border border-green-200 shadow-2xs cursor-pointer transition hover:bg-green-50"
+          style={{ color: "var(--moss)" }}
+        >
+          <Download size={12} /> Tải file mẫu
+        </button>
       </div>
       {!full && (
         <>
@@ -340,6 +348,14 @@ function UploadCard({ tag, icon: Icon = Package, title, subtitle, hint, fileStat
           <p className="text-[12px] flex-1" style={{ color: "#7D4E00" }}>
             {hint}
           </p>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); downloadSampleFile("catalog"); }}
+            className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline whitespace-nowrap flex-shrink-0 px-2 py-1 rounded bg-white border border-amber-300 shadow-2xs cursor-pointer transition hover:bg-amber-50"
+            style={{ color: "#7D4E00" }}
+          >
+            <Download size={12} /> Tải file mẫu
+          </button>
         </div>
       )}
 
@@ -501,6 +517,10 @@ export default function DataIntegrationTool() {
   // Manual Confirmations state
   const [manualConfirmations, setManualConfirmations] = useState(new Map());
 
+  // Filter & Search states
+  const [issueGroupFilter, setIssueGroupFilter] = useState("ALL");
+  const [dataSearchTerm, setDataSearchTerm] = useState("");
+
   // 3 Gói cấu hình nghiệp vụ
   const [activePresetId, setActivePresetId] = useState("balanced");
   const [hoveredPresetId, setHoveredPresetId] = useState(null);
@@ -569,6 +589,14 @@ export default function DataIntegrationTool() {
     setOrderFiles([]); setCatalogFile(null);
     setResult(null); setStep("upload"); setActiveTab("overview"); setParseError("");
     setManualConfirmations(new Map());
+    setIssueGroupFilter("ALL"); setDataSearchTerm("");
+  };
+
+  const reRunConfig = () => {
+    setResult(null); setStep("upload"); setActiveTab("overview"); setParseError("");
+    setManualConfirmations(new Map());
+    setIssueGroupFilter("ALL"); setDataSearchTerm("");
+    setShowConfigModal(true);
   };
 
   const readyToProcess = orderFiles.length > 0 && orderFiles.every((f) => f.dataRows.length > 0);
@@ -632,7 +660,8 @@ export default function DataIntegrationTool() {
     if (!result) return;
     const headers = ["Nguồn", "Mã đơn", "Ngày", "Tên sản phẩm", "Mã định danh", "Thương hiệu/NCC", "Kênh", "Trạng thái đơn", "Số lượng", "Giá bán", "Thành tiền", "Trạng thái khớp", "Vấn đề"];
     const rows = result.integrated.map((r, i) => {
-      const manual = manualConfirmations.get(i);
+      const rowId = r.rowIndex !== undefined ? r.rowIndex : i;
+      const manual = manualConfirmations.get(rowId);
       let matchSt = r.matchStatus;
       let prodName = r.ten_sp;
       let idCode = r.ma_dinh_danh;
@@ -640,6 +669,10 @@ export default function DataIntegrationTool() {
       if (manual) {
         if (manual.decision === "ACCEPT") {
           matchSt = "MATCHED_CONFIRMED_USER";
+          if (r.matched) {
+            prodName = r.matched.ten_sp;
+            idCode = r.matched.ma_dinh_danh;
+          }
         } else if (manual.decision === "REJECT") {
           matchSt = "REJECTED_USER";
           idCode = "—";
@@ -664,8 +697,10 @@ export default function DataIntegrationTool() {
   const CHART_COLORS = ["#A97B25", "#2D7A4A", "#C0392B", "#2C3E4A", "#7A8B76", "#C9A45C"];
   const currentPreviewPreset = hoveredPresetId ? PRESETS[hoveredPresetId] : activePresetId !== "custom" ? PRESETS[activePresetId] : null;
 
-  // Tính tỷ lệ khớp
-  const matchRate = result ? (result.stats.totalRows ? Math.round((result.stats.matchedCount / result.stats.totalRows) * 100) : 0) : 0;
+  // Tính tỷ lệ khớp động (cập nhật Live khi duyệt tay)
+  const acceptedManualCount = [...manualConfirmations.values()].filter((m) => m.decision === "ACCEPT").length;
+  const liveMatchedCount = result ? ((result.stats?.matchedCount || 0) + acceptedManualCount) : 0;
+  const liveMatchRate = result ? (result.stats?.totalRows ? Math.min(100, Math.round((liveMatchedCount / result.stats.totalRows) * 100)) : 0) : 0;
 
   return (
     <div className="bsi-root w-full">
@@ -997,7 +1032,7 @@ export default function DataIntegrationTool() {
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <button onClick={reset} className="bsi-btn-secondary flex items-center gap-1.5 text-[12.5px] px-3.5 py-2">
+                <button onClick={reRunConfig} className="bsi-btn-secondary flex items-center gap-1.5 text-[12.5px] px-3.5 py-2 cursor-pointer transition hover:bg-white">
                   <RotateCcw size={13} /> Chạy lại với cấu hình khác
                 </button>
               </div>
@@ -1016,8 +1051,8 @@ export default function DataIntegrationTool() {
               />
               <StatCard
                 label="✅ Đã Ghép Thành Công"
-                value={`${matchRate}%`}
-                sub={`${result.stats.matchedCount}/${result.stats.totalRows} đơn hàng`}
+                value={`${liveMatchRate}%`}
+                sub={`${liveMatchedCount}/${result.stats.totalRows} đơn hàng${acceptedManualCount > 0 ? ` (+${acceptedManualCount} duyệt tay)` : ""}`}
                 tone="moss"
                 icon={BadgeCheck}
                 iconBg="var(--moss-soft)"
@@ -1101,105 +1136,179 @@ export default function DataIntegrationTool() {
               </div>
             )}
 
-            {/* TAB 2: KIỂM TRA LỖI (GIAO DIỆN BẢNG TỐI ƯU KÍCH THƯỚC) */}
-            {activeTab === "issues" && (
-              <div className="bsi-card overflow-hidden border border-gray-200 rounded-xl bg-white shadow-sm w-full">
-                {result.issues.length === 0 ? (
-                  <div className="p-10 text-center">
-                    <div className="text-5xl mb-3">🎉</div>
-                    <p className="text-[16px] font-semibold" style={{ color: "var(--moss)" }}>
-                      Tuyệt vời! Không phát hiện lỗi nào!
-                    </p>
-                    <p className="text-[13px] mt-1 text-gray-500">
-                      Dữ liệu của bạn hoàn toàn sạch và nhất quán.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="w-full overflow-x-auto">
-                    <table className="w-full text-left text-sm table-fixed border-collapse">
-                      <thead>
-                        <tr className="bg-gray-100/80 text-gray-700 uppercase text-[11px] tracking-wider font-bold border-b border-gray-200">
-                          <th className="p-3 w-[4%] text-center">STT</th>
-                          <th className="p-3 w-[12%]">Mã Đơn</th>
-                          <th className="p-3 w-[28%]">Tên Sản Phẩm</th>
-                          <th className="p-3 w-[12%]">Nguồn</th>
-                          <th className="p-3 w-[16%]">Phân Loại Lỗi</th>
-                          <th className="p-3 w-[28%]">Chi Tiết Lỗi</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 bg-white">
-                        {result.integrated
-                          .filter((r) => r.issues && r.issues.length > 0)
-                          .map((r, i) => (
-                            <tr key={r.id || `${r.ma_don}-${i}`} className="hover:bg-gray-50/80 transition-colors">
-                              {/* STT */}
-                              <td className="p-3 text-center text-gray-400 font-mono text-xs align-top pt-3.5">
-                                {i + 1}
-                              </td>
+            {/* TAB 2: KIỂM TRA LỖI (GIAO DIỆN BẢNG TỐI ƯU KÍCH THƯỚC + BỘ LỌC) */}
+            {activeTab === "issues" && (() => {
+              const allIssueRows = result.integrated.filter((r) => r.issues && r.issues.length > 0);
+              const issueRowsByGroup = issueGroupFilter === "ALL"
+                ? allIssueRows
+                : allIssueRows.filter((r) => r.issues.some((iss) => iss.group === issueGroupFilter));
 
-                              {/* Mã Đơn */}
-                              <td className="p-3 font-mono font-bold text-gray-800 text-xs align-top pt-3.5 break-all">
-                                {r.ma_don || "—"}
-                              </td>
+              const groupCounts = {};
+              allIssueRows.forEach((r) => {
+                const groups = new Set(r.issues.map((iss) => iss.group));
+                groups.forEach((g) => {
+                  groupCounts[g] = (groupCounts[g] || 0) + 1;
+                });
+              });
 
-                              {/* Tên Sản Phẩm */}
-                              <td className="p-3 font-semibold text-gray-900 text-xs leading-relaxed align-top pt-3.5 break-words">
-                                {r.ten_sp || "Sản phẩm chưa rõ tên"}
-                              </td>
+              const GROUP_FILTER_INFO = {
+                value: { label: "Lỗi Giá Trị", icon: "🏷️", color: "text-amber-800 bg-amber-50 border-amber-300" },
+                temporal: { label: "Lỗi Ngày Tháng", icon: "📅", color: "text-purple-800 bg-purple-50 border-purple-300" },
+                technical: { label: "Lỗi Kỹ Thuật", icon: "🔧", color: "text-rose-800 bg-rose-50 border-rose-300" },
+                semantic: { label: "Lỗi Ngữ Nghĩa", icon: "🚚", color: "text-blue-800 bg-blue-50 border-blue-300" },
+                schema: { label: "Lỗi Cấu Trúc", icon: "⚠️", color: "text-orange-800 bg-orange-50 border-orange-300" },
+                entity: { label: "Lỗi Thực Thể", icon: "🔍", color: "text-indigo-800 bg-indigo-50 border-indigo-300" },
+              };
 
-                              {/* Nguồn */}
-                              <td className="p-3 align-top pt-3">
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium text-[11px] border border-gray-200 truncate max-w-full" title={r.nguon}>
-                                  📂 {r.nguon}
-                                </span>
-                              </td>
+              return (
+                <div className="bsi-card overflow-hidden border border-gray-200 rounded-xl bg-white shadow-sm w-full">
+                  {allIssueRows.length === 0 ? (
+                    <div className="p-10 text-center">
+                      <div className="text-5xl mb-3">🎉</div>
+                      <p className="text-[16px] font-semibold" style={{ color: "var(--moss)" }}>
+                        Tuyệt vời! Không phát hiện lỗi nào!
+                      </p>
+                      <p className="text-[13px] mt-1 text-gray-500">
+                        Dữ liệu của bạn hoàn toàn sạch và nhất quán.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="w-full">
+                      {/* Hàng bộ lọc nhanh theo loại lỗi */}
+                      <div className="p-3 bg-gray-50/90 border-b border-gray-200 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Lọc loại lỗi:</span>
+                        <button
+                          type="button"
+                          onClick={() => setIssueGroupFilter("ALL")}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                            issueGroupFilter === "ALL"
+                              ? "bg-gray-800 text-white shadow-sm"
+                              : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-100"
+                          }`}
+                        >
+                          <span>Tất cả</span>
+                          <span className={`px-1.5 py-0.2 rounded text-[10px] ${issueGroupFilter === "ALL" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-600"}`}>
+                            {allIssueRows.length}
+                          </span>
+                        </button>
+                        {Object.entries(groupCounts).map(([grp, count]) => {
+                          const info = GROUP_FILTER_INFO[grp] || { label: GROUP_LABELS[grp] || grp, icon: "⚠️", color: "text-gray-800 bg-gray-50 border-gray-300" };
+                          const isSelected = issueGroupFilter === grp;
+                          return (
+                            <button
+                              key={grp}
+                              type="button"
+                              onClick={() => setIssueGroupFilter(isSelected ? "ALL" : grp)}
+                              className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
+                                isSelected
+                                  ? "bg-gray-800 text-white border-gray-800 shadow-sm"
+                                  : `${info.color} hover:opacity-85`
+                              }`}
+                            >
+                              <span>{info.icon}</span>
+                              <span>{info.label}</span>
+                              <span className={`px-1.5 py-0.2 rounded text-[10px] ${isSelected ? "bg-gray-700 text-white" : "bg-white/80 border"}`}>
+                                {count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                              {/* Phân Loại Lỗi */}
-                              <td className="p-3 align-top pt-3">
-                                <div className="flex flex-col gap-1.5">
-                                  {[...new Set(r.issues.map((iss) => iss.group))].map((g) => {
-                                    const label = GROUP_LABELS[g] || g;
-                                    let badgeStyle = "bg-rose-100 text-rose-900 border-rose-300";
-                                    let icon = "⚠️";
-
-                                    if (label.includes("Giá") || label.includes("Tiền")) {
-                                      badgeStyle = "bg-amber-100 text-amber-900 border-amber-300";
-                                      icon = "🏷️";
-                                    } else if (label.includes("Ý Nghĩa") || label.includes("Chuẩn")) {
-                                      badgeStyle = "bg-blue-100 text-blue-900 border-blue-300";
-                                      icon = "🚚";
-                                    } else if (label.includes("Ngày")) {
-                                      badgeStyle = "bg-purple-100 text-purple-900 border-purple-300";
-                                      icon = "📅";
-                                    }
-
-                                    return (
-                                      <span
-                                        key={g}
-                                        className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold border w-fit ${badgeStyle}`}
-                                      >
-                                        <span>{icon}</span>
-                                        <span>{label}</span>
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              </td>
-
-                              {/* Chi Tiết Lỗi */}
-                              <td className="p-3 align-top pt-2.5">
-                                <div className="bg-red-50/60 border border-red-100 rounded-lg p-2.5 break-words">
-                                  <IssueList issues={r.issues} />
-                                </div>
-                              </td>
+                      {/* Bảng danh sách lỗi */}
+                      <div className="w-full overflow-x-auto">
+                        <table className="w-full text-left text-sm table-fixed border-collapse">
+                          <thead>
+                            <tr className="bg-gray-100/80 text-gray-700 uppercase text-[11px] tracking-wider font-bold border-b border-gray-200">
+                              <th className="p-3 w-[4%] text-center">STT</th>
+                              <th className="p-3 w-[12%]">Mã Đơn</th>
+                              <th className="p-3 w-[28%]">Tên Sản Phẩm</th>
+                              <th className="p-3 w-[12%]">Nguồn</th>
+                              <th className="p-3 w-[16%]">Phân Loại Lỗi</th>
+                              <th className="p-3 w-[28%]">Chi Tiết Lỗi</th>
                             </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                          </thead>
+                          <tbody className="divide-y divide-gray-200 bg-white">
+                            {issueRowsByGroup.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="p-8 text-center text-gray-500 text-xs font-medium">
+                                  Không có đơn hàng nào thuộc nhóm lỗi này.
+                                </td>
+                              </tr>
+                            ) : (
+                              issueRowsByGroup.map((r, i) => (
+                                <tr key={r.id || `${r.ma_don}-${i}`} className="hover:bg-gray-50/80 transition-colors">
+                                  {/* STT */}
+                                  <td className="p-3 text-center text-gray-400 font-mono text-xs align-top pt-3.5">
+                                    {i + 1}
+                                  </td>
+
+                                  {/* Mã Đơn */}
+                                  <td className="p-3 font-mono font-bold text-gray-800 text-xs align-top pt-3.5 break-all">
+                                    {r.ma_don || "—"}
+                                  </td>
+
+                                  {/* Tên Sản Phẩm */}
+                                  <td className="p-3 font-semibold text-gray-900 text-xs leading-relaxed align-top pt-3.5 break-words">
+                                    {r.ten_sp || "Sản phẩm chưa rõ tên"}
+                                  </td>
+
+                                  {/* Nguồn */}
+                                  <td className="p-3 align-top pt-3">
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-medium text-[11px] border border-gray-200 truncate max-w-full" title={r.nguon}>
+                                      📂 {r.nguon}
+                                    </span>
+                                  </td>
+
+                                  {/* Phân Loại Lỗi */}
+                                  <td className="p-3 align-top pt-3">
+                                    <div className="flex flex-col gap-1.5">
+                                      {[...new Set(r.issues.map((iss) => iss.group))].map((g) => {
+                                        const label = GROUP_LABELS[g] || g;
+                                        let badgeStyle = "bg-rose-100 text-rose-900 border-rose-300";
+                                        let icon = "⚠️";
+
+                                        if (label.includes("Giá") || label.includes("Tiền")) {
+                                          badgeStyle = "bg-amber-100 text-amber-900 border-amber-300";
+                                          icon = "🏷️";
+                                        } else if (label.includes("Ý Nghĩa") || label.includes("Chuẩn")) {
+                                          badgeStyle = "bg-blue-100 text-blue-900 border-blue-300";
+                                          icon = "🚚";
+                                        } else if (label.includes("Ngày")) {
+                                          badgeStyle = "bg-purple-100 text-purple-900 border-purple-300";
+                                          icon = "📅";
+                                        }
+
+                                        return (
+                                          <span
+                                            key={g}
+                                            className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold border w-fit ${badgeStyle}`}
+                                          >
+                                            <span>{icon}</span>
+                                            <span>{label}</span>
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  </td>
+
+                                  {/* Chi Tiết Lỗi */}
+                                  <td className="p-3 align-top pt-2.5">
+                                    <div className="bg-red-50/60 border border-red-100 rounded-lg p-2.5 break-words">
+                                      <IssueList issues={r.issues} />
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* TAB 3: CẦN BẠN XEM */}
             {activeTab === "manual_confirm" && (
@@ -1225,10 +1334,11 @@ export default function DataIntegrationTool() {
                 ) : (
                   <div className="space-y-4">
                     {result.pendingConfirmations.map((item, idx) => {
-                      const manual = manualConfirmations.get(idx);
+                      const rowId = item.rowIndex !== undefined ? item.rowIndex : idx;
+                      const manual = manualConfirmations.get(rowId);
                       const isUnresolved = item.matchStatus === "UNRESOLVED";
                       return (
-                        <div key={idx} className="border-2 rounded-xl p-4 text-[13px]" style={{
+                        <div key={rowId} className="border-2 rounded-xl p-4 text-[13px]" style={{
                           borderColor: manual ? "var(--moss)" : isUnresolved ? "var(--brick)" : "var(--amber-warn)",
                           background: manual?.decision === "ACCEPT" ? "var(--moss-soft)" : manual?.decision === "REJECT" ? "var(--brick-soft)" : "var(--paper)"
                         }}>
@@ -1271,15 +1381,17 @@ export default function DataIntegrationTool() {
                           <div className="flex flex-wrap gap-2.5 pt-3 border-t items-center" style={{ borderColor: "var(--line)" }}>
                             {item.matched && (
                               <button
-                                onClick={() => handleManualDecision(idx, "ACCEPT", item)}
-                                className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-bold rounded-lg transition ${manual?.decision === "ACCEPT" ? "bsi-btn-success" : "bsi-btn-secondary"}`}
+                                type="button"
+                                onClick={() => handleManualDecision(rowId, "ACCEPT", item)}
+                                className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-bold rounded-lg cursor-pointer transition ${manual?.decision === "ACCEPT" ? "bsi-btn-success" : "bsi-btn-secondary"}`}
                               >
                                 <ThumbsUp size={16} /> ✅ Đúng rồi, ghép vào!
                               </button>
                             )}
                             <button
-                              onClick={() => handleManualDecision(idx, "REJECT", item)}
-                              className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-bold rounded-lg transition ${manual?.decision === "REJECT" ? "bsi-btn-danger" : "bsi-btn-secondary"}`}
+                              type="button"
+                              onClick={() => handleManualDecision(rowId, "REJECT", item)}
+                              className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-bold rounded-lg cursor-pointer transition ${manual?.decision === "REJECT" ? "bsi-btn-danger" : "bsi-btn-secondary"}`}
                             >
                               <ThumbsDown size={16} /> {item.matched ? "❌ Không, sai sản phẩm!" : "⏭️ Bỏ qua sản phẩm này"}
                             </button>
@@ -1479,49 +1591,117 @@ export default function DataIntegrationTool() {
             )}
 
             {/* TAB 5: XEM TOÀN BỘ DỮ LIỆU */}
-            {activeTab === "data" && (
-              <div className="bsi-card overflow-hidden">
-                <div className="p-4 flex items-center gap-3" style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>
-                  <Eye size={16} style={{ color: "var(--ink-soft)" }} />
-                  <span className="text-[13px] font-semibold">Toàn bộ {result.integrated.length} dòng dữ liệu đã tích hợp</span>
-                  <button onClick={exportSummaryFile} className="ml-auto bsi-btn-cta flex items-center gap-2 px-4 py-2 text-[13px]">
-                    <Download size={14} /> Tải Xuống File
-                  </button>
-                </div>
-                <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
-                  <table className="w-full text-[13px]">
-                    <thead className="sticky top-0" style={{ background: "var(--paper-card)" }}>
-                      <tr style={{ borderBottom: "1px solid var(--line)" }}>
-                        {["Nguồn", "Mã Đơn", "Ngày", "Tên Sản Phẩm", "Mã Hàng", "Kênh", "Trạng Thái", "SL", "Giá Bán", "Thành Tiền", "Kết Quả"].map((h) => (
-                          <th key={h} className="text-left font-bold px-3.5 py-3 uppercase tracking-wide text-[11px]" style={{ color: "var(--ink-soft)" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.integrated.map((r, i) => (
-                        <tr key={i} className="bsi-row" style={{ borderBottom: "1px solid var(--line)" }}>
-                          <td className="px-3.5 py-2.5 whitespace-nowrap">{r.nguon}</td>
-                          <td className="px-3.5 py-2.5 bsi-mono whitespace-nowrap text-[12px]">{r.ma_don || "—"}</td>
-                          <td className="px-3.5 py-2.5 whitespace-nowrap">{r.ngay || "—"}</td>
-                          <td className="px-3.5 py-2.5 font-semibold">{r.ten_sp || "—"}</td>
-                          <td className="px-3.5 py-2.5 bsi-mono whitespace-nowrap text-[12px]">{r.ma_dinh_danh || "—"}</td>
-                          <td className="px-3.5 py-2.5 whitespace-nowrap">{r.kenh}</td>
-                          <td className="px-3.5 py-2.5 whitespace-nowrap text-[12px]">{r.trang_thai || "—"}</td>
-                          <td className="px-3.5 py-2.5 font-bold">{r.so_luong}</td>
-                          <td className="px-3.5 py-2.5 whitespace-nowrap">{formatVND(r.gia)}</td>
-                          <td className="px-3.5 py-2.5 whitespace-nowrap font-bold">{formatVND(r.thanh_tien)}</td>
-                          <td className="px-3.5 py-2.5">
-                            {r.issues.length === 0
-                              ? <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>✅ Sạch</span>
-                              : <span className="bsi-badge" style={{ background: "var(--brick-soft)", color: "var(--brick)" }}>⚠️ {r.issues.length} lỗi</span>}
-                          </td>
+            {activeTab === "data" && (() => {
+              const displayedDataRows = result.integrated.filter((r) => {
+                if (!dataSearchTerm.trim()) return true;
+                const term = dataSearchTerm.trim().toLowerCase();
+                return (
+                  (r.ma_don && String(r.ma_don).toLowerCase().includes(term)) ||
+                  (r.ten_sp && String(r.ten_sp).toLowerCase().includes(term)) ||
+                  (r.kenh && String(r.kenh).toLowerCase().includes(term)) ||
+                  (r.ma_dinh_danh && String(r.ma_dinh_danh).toLowerCase().includes(term)) ||
+                  (r.nguon && String(r.nguon).toLowerCase().includes(term)) ||
+                  (r.trang_thai && String(r.trang_thai).toLowerCase().includes(term))
+                );
+              });
+
+              return (
+                <div className="bsi-card overflow-hidden">
+                  <div className="p-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: "1px solid var(--line)", background: "var(--paper)" }}>
+                    <div className="flex items-center gap-2">
+                      <Eye size={16} style={{ color: "var(--ink-soft)" }} />
+                      <span className="text-[13px] font-semibold whitespace-nowrap">
+                        Toàn bộ {result.integrated.length} dòng dữ liệu
+                        {dataSearchTerm && ` (Khớp: ${displayedDataRows.length})`}
+                      </span>
+                    </div>
+
+                    {/* Ô tìm kiếm */}
+                    <div className="relative flex-1 max-w-sm">
+                      <input
+                        type="text"
+                        value={dataSearchTerm}
+                        onChange={(e) => setDataSearchTerm(e.target.value)}
+                        placeholder="🔍 Tìm mã đơn, tên sách, kênh, mã SP..."
+                        className="w-full text-xs px-3 py-1.5 pr-7 rounded-lg border border-gray-300 bg-white outline-none focus:border-green-600 shadow-2xs"
+                      />
+                      {dataSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setDataSearchTerm("")}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs font-bold cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <button onClick={exportSummaryFile} className="bsi-btn-cta flex items-center gap-2 px-4 py-2 text-[13px] whitespace-nowrap cursor-pointer">
+                      <Download size={14} /> Tải Xuống File
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+                    <table className="w-full text-[13px]">
+                      <thead className="sticky top-0" style={{ background: "var(--paper-card)" }}>
+                        <tr style={{ borderBottom: "1px solid var(--line)" }}>
+                          {["Nguồn", "Mã Đơn", "Ngày", "Tên Sản Phẩm", "Mã Hàng", "Kênh", "Trạng Thái", "SL", "Giá Bán", "Thành Tiền", "Kết Quả"].map((h) => (
+                            <th key={h} className="text-left font-bold px-3.5 py-3 uppercase tracking-wide text-[11px]" style={{ color: "var(--ink-soft)" }}>{h}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {displayedDataRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={11} className="p-8 text-center text-gray-500 text-xs">
+                              Không tìm thấy dòng dữ liệu nào khớp với từ khóa "{dataSearchTerm}".
+                            </td>
+                          </tr>
+                        ) : (
+                          displayedDataRows.map((r, i) => {
+                            const rowId = r.rowIndex !== undefined ? r.rowIndex : i;
+                            const manual = manualConfirmations.get(rowId);
+                            return (
+                              <tr key={r.id || `${r.ma_don}-${i}`} className="bsi-row" style={{ borderBottom: "1px solid var(--line)" }}>
+                                <td className="px-3.5 py-2.5 whitespace-nowrap">{r.nguon}</td>
+                                <td className="px-3.5 py-2.5 bsi-mono whitespace-nowrap text-[12px]">{r.ma_don || "—"}</td>
+                                <td className="px-3.5 py-2.5 whitespace-nowrap">{r.ngay || "—"}</td>
+                                <td className="px-3.5 py-2.5 font-semibold">{manual?.decision === "ACCEPT" && r.matched ? r.matched.ten_sp : (r.ten_sp || "—")}</td>
+                                <td className="px-3.5 py-2.5 bsi-mono whitespace-nowrap text-[12px]">{manual?.decision === "ACCEPT" && r.matched ? (r.matched.ma_dinh_danh || "—") : (r.ma_dinh_danh || "—")}</td>
+                                <td className="px-3.5 py-2.5 whitespace-nowrap">{r.kenh}</td>
+                                <td className="px-3.5 py-2.5 whitespace-nowrap text-[12px]">{r.trang_thai || "—"}</td>
+                                <td className="px-3.5 py-2.5 font-bold">{r.so_luong}</td>
+                                <td className="px-3.5 py-2.5 whitespace-nowrap">{formatVND(r.gia)}</td>
+                                <td className="px-3.5 py-2.5 whitespace-nowrap font-bold">{formatVND(r.thanh_tien)}</td>
+                                <td className="px-3.5 py-2.5 whitespace-nowrap">
+                                  {manual?.decision === "ACCEPT" ? (
+                                    <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>
+                                      ✅ Đã duyệt ghép (Tay)
+                                    </span>
+                                  ) : manual?.decision === "REJECT" ? (
+                                    <span className="bsi-badge" style={{ background: "var(--brick-soft)", color: "var(--brick)" }}>
+                                      ❌ Từ chối ghép (Tay)
+                                    </span>
+                                  ) : r.issues.length === 0 ? (
+                                    <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>
+                                      ✅ Sạch
+                                    </span>
+                                  ) : (
+                                    <span className="bsi-badge" style={{ background: "var(--brick-soft)", color: "var(--brick)" }}>
+                                      ⚠️ {r.issues.length} lỗi
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
       </div>

@@ -282,7 +282,7 @@ export function checkStaleData(rows) {
     const price = normalizeNumber(row.gia);
     
     if ((normStatus === "Đã hủy" || normStatus === "Trả hàng") && qty > 0 && price > 0) {
-      issues.push({ rowIndex: i, group: "temporal", severity: "FLAGGED_ONLY", detail: `Đơn hàng có trạng thái ${normStatus} nhưng vẫn ghi nhận doanh thu` });
+      issues.push({ rowIndex: i, group: "value", severity: "FLAGGED_ONLY", detail: `Đơn hàng có trạng thái ${normStatus} nhưng vẫn ghi nhận doanh thu` });
     }
   });
   return issues;

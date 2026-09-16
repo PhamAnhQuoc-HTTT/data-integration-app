@@ -190,6 +190,8 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     }
 
     return {
+      id: i,
+      rowIndex: i,
       nguon: row.__source,
       ma_don: row.ma_don,
       ngay: row.ngay,
