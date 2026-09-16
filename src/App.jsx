@@ -501,6 +501,39 @@ function ExpertDetail({ title, children }) {
   );
 }
 
+/* Bộ bọc lỗi tránh màn hình trắng khi render */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bsi-card p-6 text-center bg-red-50 border border-red-300 rounded-xl my-4">
+          <div className="text-3xl mb-2">⚠️</div>
+          <h3 className="text-sm font-bold text-red-800 mb-1">Không thể hiển thị nội dung này</h3>
+          <p className="text-xs text-red-600 mb-3 font-mono">{String(this.state.error?.message || this.state.error)}</p>
+          <button
+            type="button"
+            onClick={() => this.setState({ hasError: false, error: null })}
+            className="px-3 py-1.5 bg-red-700 text-white rounded-lg text-xs font-bold hover:bg-red-800 cursor-pointer"
+          >
+            Thử tải lại tab này
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /* ============================== MAIN COMPONENT ============================== */
 export default function DataIntegrationTool() {
   const [step, setStep] = useState("upload");
@@ -1096,6 +1129,7 @@ export default function DataIntegrationTool() {
               ))}
             </div>
 
+            <ErrorBoundary>
             {/* TAB 1: TỔNG QUAN */}
             {activeTab === "overview" && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1489,44 +1523,66 @@ export default function DataIntegrationTool() {
                         {result.resolutionStats ? `${result.resolutionStats.exactMatchRate}%` : "—"}
                       </p>
                       <p className="text-[12px] text-gray-400 mt-1">
-                        {result.resolutionStats ? `${result.resolutionStats.exactOnlyMatchesCount}/${result.stats.totalRows} đơn khớp` : "Chỉ khớp khi đúng mã"}
+                        {result.resolutionStats ? `${result.resolutionStats.exactOnlyMatchesCount}/${result.stats.totalRows} đơn khớp` : "Không có danh mục chuẩn"}
                       </p>
                     </div>
 
                     <div className="p-4 rounded-xl border-2 text-center" style={{ borderColor: "var(--moss)", background: "var(--moss-soft)" }}>
                       <p className="text-[12px] uppercase font-bold mb-2" style={{ color: "var(--moss)" }}>🚀 Hệ thống này<br />(Ghép thông minh 3 bước)</p>
                       <p className="bsi-serif text-[2.2rem] font-black" style={{ color: "var(--moss)" }}>
-                        {result.resolutionStats ? `${result.resolutionStats.multiTierTotalLinkedRate}%` : `${matchRate}%`}
+                        {result.resolutionStats ? `${result.resolutionStats.multiTierTotalLinkedRate}%` : `${liveMatchRate}%`}
                       </p>
-                      <p className="text-[12px] mt-1" style={{ color: "var(--moss)" }}>Bước 1 (Mã) + Bước 2 (Tra cứu) + Bước 3 (So sánh tên)</p>
+                      <p className="text-[12px] mt-1" style={{ color: "var(--moss)" }}>
+                        {result.resolutionStats ? "Bước 1 (Mã) + Bước 2 (Tra cứu) + Bước 3 (So sánh tên)" : (result.strategyLabel || "Tự động phân giải thực thể")}
+                      </p>
                     </div>
 
                     <div className="p-4 rounded-xl border-2 text-center" style={{ borderColor: "var(--brass)", background: "var(--brass-soft)" }}>
                       <p className="text-[12px] uppercase font-bold text-amber-900 mb-2">🏆 Cải Thiện Được</p>
                       <p className="bsi-serif text-[2.2rem] font-black text-amber-900">
-                        {result.resolutionStats ? `+${result.resolutionStats.improvementRate}%` : "+30%"}
+                        {result.resolutionStats ? `+${result.resolutionStats.improvementRate}%` : (liveMatchRate > 0 ? `+${liveMatchRate}%` : "—")}
                       </p>
                       <p className="text-[12px] text-amber-700 mt-1">Nhờ nhận dạng tên viết tắt, thiếu dấu, sai mã</p>
                     </div>
                   </div>
 
-                  {result.resolutionStats && (
+                  {result.resolutionStats ? (
                     <div className="p-4 rounded-xl border border-gray-200 bg-white text-[13px] space-y-2">
                       <p className="font-bold text-gray-700 mb-2">📊 Chi tiết từng bước ghép:</p>
                       <div className="flex items-center gap-3">
                         <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Bước 1</span>
-                        <span><strong>Khớp Mã Chính Xác:</strong> {result.resolutionStats.breakdown.tier1_exact} đơn hàng khớp bằng mã sản phẩm.</span>
+                        <span><strong>Khớp Mã Chính Xác:</strong> {result.resolutionStats?.breakdown?.tier1_exact ?? 0} đơn hàng khớp bằng mã sản phẩm.</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="bsi-badge" style={{ background: "var(--amber-warn-soft)", color: "var(--amber-warn)" }}>Bước 2</span>
-                        <span><strong>Tra Cứu Mã Tương Đương:</strong> {result.resolutionStats.breakdown.tier2_crosswalk} đơn khớp qua bảng mã nội bộ.</span>
+                        <span><strong>Tra Cứu Mã Tương Đương:</strong> {result.resolutionStats?.breakdown?.tier2_crosswalk ?? 0} đơn khớp qua bảng mã nội bộ.</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="bsi-badge" style={{ background: "var(--brass-soft)", color: "#7A5A15" }}>Bước 3</span>
-                        <span><strong>So Sánh Tên Sản Phẩm:</strong> {result.resolutionStats.breakdown.tier3_fuzzy_high} tự động ghép + {result.resolutionStats.breakdown.tier3_fuzzy_confirm} chuyển bạn xem xét.</span>
+                        <span><strong>So Sánh Tên Sản Phẩm:</strong> {result.resolutionStats?.breakdown?.tier3_fuzzy_high ?? 0} tự động ghép + {result.resolutionStats?.breakdown?.tier3_fuzzy_confirm ?? 0} chuyển bạn xem xét.</span>
                       </div>
                     </div>
-                  )}
+                  ) : result.clustersStats ? (
+                    <div className="p-4 rounded-xl border border-gray-200 bg-white text-[13px] space-y-2">
+                      <p className="font-bold text-gray-700 mb-2">📊 Chi tiết gom cụm tự động:</p>
+                      <div className="flex items-center gap-3">
+                        <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Cụm</span>
+                        <span><strong>Tổng số cụm phát hiện:</strong> {result.clustersStats.totalClusters} nhóm sản phẩm tương đương.</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="bsi-badge" style={{ background: "var(--amber-warn-soft)", color: "var(--amber-warn)" }}>Liên kết</span>
+                        <span><strong>Số cụm đa nguồn:</strong> {result.clustersStats.multiItemClusters} nhóm liên kết nhiều kênh bán.</span>
+                      </div>
+                    </div>
+                  ) : result.bipartiteStats ? (
+                    <div className="p-4 rounded-xl border border-gray-200 bg-white text-[13px] space-y-2">
+                      <p className="font-bold text-gray-700 mb-2">📊 Chi tiết ghép cặp tối ưu:</p>
+                      <div className="flex items-center gap-3">
+                        <span className="bsi-badge" style={{ background: "var(--moss-soft)", color: "var(--moss)" }}>Tối ưu</span>
+                        <span><strong>Số cặp ghép thành công:</strong> {result.bipartiteStats.matchedPairsCount || 0} sản phẩm giữa 2 nguồn.</span>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <ExpertDetail title="Chi tiết kỹ thuật — RQ2: Multi-tier Entity Resolution vs Exact Matching (Dành cho chuyên gia / giảng viên)">
                     <p>RQ2 kiểm chứng thực nghiệm: phương pháp 3 tầng (Tầng 1: Exact ID match, Tầng 2: Crosswalk/Alias lookup, Tầng 3: Fuzzy Token-Sort với ngưỡng {config.fuzzyHighThreshold}%/{config.fuzzyConfirmThreshold}%) cải thiện tỷ lệ liên kết thực thể so với Exact Matching đơn thuần. Bipartite Matching được sử dụng khi không có catalog.</p>
@@ -1702,6 +1758,7 @@ export default function DataIntegrationTool() {
                 </div>
               );
             })()}
+            </ErrorBoundary>
           </div>
         )}
       </div>
