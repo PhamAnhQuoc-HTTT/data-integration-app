@@ -24,6 +24,9 @@ describe("normalizeNumber", () => {
 describe("normalizeDate", () => {
   it("parses dd/mm/yyyy", () => { expect(normalizeDate("05/08/2026")).toBe("2026-08-05"); });
   it("parses iso format", () => { expect(normalizeDate("2026-08-05")).toBe("2026-08-05"); });
+  it("parses date with attached time", () => { expect(normalizeDate("29-07-2025 11:41:00")).toBe("2025-07-29"); });
+  it("parses Vietnamese text date", () => { expect(normalizeDate("ngày 7 tháng 7 năm 2025")).toBe("2025-07-07"); });
+  it("parses dot date format", () => { expect(normalizeDate("15.08.2025")).toBe("2025-08-15"); });
   it("returns null for invalid/empty", () => { expect(normalizeDate("")).toBeNull(); });
 });
 

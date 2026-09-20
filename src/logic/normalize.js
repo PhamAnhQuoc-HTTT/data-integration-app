@@ -71,6 +71,8 @@ const DATE_PATTERNS = [
   { re: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/, order: ["d", "m", "y"] }, // dd/mm/yyyy
   { re: /^(\d{4})-(\d{1,2})-(\d{1,2})$/, order: ["y", "m", "d"] }, // yyyy-mm-dd
   { re: /^(\d{1,2})-(\d{1,2})-(\d{4})$/, order: ["d", "m", "y"] }, // dd-mm-yyyy
+  { re: /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/, order: ["d", "m", "y"] }, // dd.mm.yyyy
+  { re: /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, order: ["y", "m", "d"] }, // yyyy/mm/dd
 ];
 
 /** Thử các định dạng ngày phổ biến ở VN, trả về chuẩn ISO (yyyy-mm-dd) hoặc null. */
@@ -79,8 +81,23 @@ export function normalizeDate(value) {
   const text = String(value).trim();
   if (text === "") return null;
 
+  // 1. Khớp dạng chữ tiếng Việt: ngày DD tháng MM năm YYYY
+  const vnMatch = text.match(/ngày\s*(\d{1,2})\s*tháng\s*(\d{1,2})\s*năm\s*(\d{4})/i);
+  if (vnMatch) {
+    const d = parseInt(vnMatch[1], 10);
+    const m = parseInt(vnMatch[2], 10);
+    const y = parseInt(vnMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    }
+    return null;
+  }
+
+  // 2. Bỏ phần giờ nếu có ở đuôi (VD: "29-07-2025 11:41:00" -> "29-07-2025")
+  const cleanDateText = text.replace(/\s+\d{1,2}:\d{2}(?::\d{2})?.*$/, "").trim();
+
   for (const { re, order } of DATE_PATTERNS) {
-    const m = text.match(re);
+    const m = cleanDateText.match(re);
     if (m) {
       const parts = {};
       order.forEach((key, i) => { parts[key] = parseInt(m[i + 1], 10); });
