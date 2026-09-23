@@ -70,7 +70,8 @@ export function checkStructuralConflict(rows) {
   const issues = [];
   const timeRegex = /\d{2}:\d{2}/;
   rows.forEach((row, i) => {
-    if (row.ngay && timeRegex.test(String(row.ngay))) {
+    const rawDate = row.__raw_ngay || row.ngay;
+    if (rawDate && timeRegex.test(String(rawDate))) {
       issues.push({ rowIndex: i, group: "schema", severity: "AUTO_FIXED", detail: "Đã tách phần giờ khỏi trường ngày" });
     }
   });
@@ -157,7 +158,8 @@ export function checkMalformed(rows) {
   return issues;
 }
 
-export function checkPriceAnomaly(rows) {
+export function checkPriceAnomaly(rows, options = {}) {
+  const threshold = options.priceDeviationThreshold !== undefined ? options.priceDeviationThreshold : PRICE_DEVIATION_THRESHOLD;
   const issues = [];
   rows.forEach((row, i) => {
     if (!row.matched) return;
@@ -165,7 +167,7 @@ export function checkPriceAnomaly(rows) {
     const price = normalizeNumber(row.gia);
     if (listPrice && price !== null) {
       const diff = (price - listPrice) / listPrice;
-      if (Math.abs(diff) > PRICE_DEVIATION_THRESHOLD) {
+      if (Math.abs(diff) > threshold) {
         issues.push({
           rowIndex: i, group: "value", severity: "FLAGGED_ONLY",
           detail: `Giá lệch ${(diff * 100).toFixed(0)}% so với giá chuẩn (${listPrice.toLocaleString("vi-VN")}đ)`,
@@ -176,7 +178,8 @@ export function checkPriceAnomaly(rows) {
   return issues;
 }
 
-export function checkCrossChannelPrice(rows) {
+export function checkCrossChannelPrice(rows, options = {}) {
+  const threshold = options.priceDeviationThreshold !== undefined ? options.priceDeviationThreshold : PRICE_DEVIATION_THRESHOLD;
   const issues = [];
   const productPrices = {}; 
 
@@ -202,12 +205,12 @@ export function checkCrossChannelPrice(rows) {
         const b = entries[j];
         if (a.kenh !== b.kenh) {
           const diff = Math.abs(a.price - b.price) / Math.min(a.price, b.price);
-          if (diff > 0.3) {
+          if (diff > threshold) {
             issues.push({ 
               rowIndex: b.rowIndex, 
               group: "value", 
               severity: "FLAGGED_ONLY", 
-              detail: `Giá bán ${ma} ở kênh ${a.kenh} (${a.price}đ) chênh ${(diff * 100).toFixed(0)}% so với kênh ${b.kenh} (${b.price}đ)` 
+              detail: `Giá bán ${ma} ở kênh ${a.kenh} (${a.price.toLocaleString("vi-VN")}đ) chênh ${(diff * 100).toFixed(0)}% so với kênh ${b.kenh} (${b.price.toLocaleString("vi-VN")}đ)` 
             });
             found = true;
             break;
@@ -315,23 +318,25 @@ export function checkSynonymConflict(rows) {
   const issues = [];
   const seenMaps = new Set();
   rows.forEach((row, i) => {
-    if (row.kenh) {
-      const canonical = normalizeChannel(row.kenh);
-      if (canonical && canonical !== row.kenh) {
-        const mapping = `kenh:${row.kenh}->${canonical}`;
+    const rawKenh = row.__raw_kenh || row.kenh;
+    if (rawKenh) {
+      const canonical = normalizeChannel(rawKenh);
+      if (canonical && canonical !== rawKenh) {
+        const mapping = `kenh:${rawKenh}->${canonical}`;
         if (!seenMaps.has(mapping)) {
           seenMaps.add(mapping);
-          issues.push({ rowIndex: i, group: "semantic", severity: "AUTO_FIXED", detail: `Đã chuẩn hóa kênh bán: ${row.kenh} → ${canonical}` });
+          issues.push({ rowIndex: i, group: "semantic", severity: "AUTO_FIXED", detail: `Đã chuẩn hóa kênh bán: ${rawKenh} → ${canonical}` });
         }
       }
     }
-    if (row.trang_thai) {
-      const canonical = normalizeOrderStatus(row.trang_thai);
-      if (canonical && canonical !== row.trang_thai) {
-        const mapping = `trang_thai:${row.trang_thai}->${canonical}`;
+    const rawStatus = row.__raw_trang_thai || row.trang_thai;
+    if (rawStatus) {
+      const canonical = normalizeOrderStatus(rawStatus);
+      if (canonical && canonical !== rawStatus) {
+        const mapping = `trang_thai:${rawStatus}->${canonical}`;
         if (!seenMaps.has(mapping)) {
           seenMaps.add(mapping);
-          issues.push({ rowIndex: i, group: "semantic", severity: "AUTO_FIXED", detail: `Đã chuẩn hóa trạng thái: ${row.trang_thai} → ${canonical}` });
+          issues.push({ rowIndex: i, group: "semantic", severity: "AUTO_FIXED", detail: `Đã chuẩn hóa trạng thái: ${rawStatus} → ${canonical}` });
         }
       }
     }
@@ -350,7 +355,7 @@ export function checkDuplicates(rows) {
     if (!row.ma_don) return;
     const key = `${row.__source || ""}|${row.ma_don}`;
     if (seen.has(key)) {
-      issues.push({ rowIndex: i, group: "technical", severity: "NEEDS_CONFIRMATION", detail: `Trùng mã đơn "${row.ma_don}" với dòng #${seen.get(key)}` });
+      issues.push({ rowIndex: i, group: "technical", severity: "NEEDS_CONFIRMATION", detail: `Trùng mã đơn "${row.ma_don}" với dòng #${seen.get(key) + 1}` });
     } else {
       seen.set(key, i);
     }
@@ -387,7 +392,7 @@ export function checkEncodingIssues(rows) {
 // Runner & Summary
 // ============================================================================
 
-export function runAllChecks(rows) {
+export function runAllChecks(rows, options = {}) {
   return [
     ...checkMissingAttributes(rows),
     ...checkStructuralConflict(rows),
@@ -395,8 +400,8 @@ export function runAllChecks(rows) {
     ...checkManyToOne(rows),
     ...checkMissing(rows),
     ...checkMalformed(rows),
-    ...checkPriceAnomaly(rows),
-    ...checkCrossChannelPrice(rows),
+    ...checkPriceAnomaly(rows, options),
+    ...checkCrossChannelPrice(rows, options),
     ...checkNullVsZero(rows),
     ...checkTimingMismatch(rows),
     ...checkStaleData(rows),

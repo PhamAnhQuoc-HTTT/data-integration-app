@@ -246,14 +246,6 @@ function OrdersDropzone({ files, onAddFile, onRemoveFile, onUpdateChannelLabel, 
         <p className="text-[12px] flex-1" style={{ color: "var(--moss)" }}>
           Hỗ trợ tối đa <strong>{maxFiles} file</strong>.
         </p>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); downloadSampleFile("orders"); }}
-          className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline whitespace-nowrap flex-shrink-0 px-2 py-1 rounded bg-white border border-green-200 shadow-2xs cursor-pointer transition hover:bg-green-50"
-          style={{ color: "var(--moss)" }}
-        >
-          <Download size={12} /> Tải file mẫu
-        </button>
       </div>
       {!full && (
         <>
@@ -348,14 +340,6 @@ function UploadCard({ tag, icon: Icon = Package, title, subtitle, hint, fileStat
           <p className="text-[12px] flex-1" style={{ color: "#7D4E00" }}>
             {hint}
           </p>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); downloadSampleFile("catalog"); }}
-            className="flex items-center gap-1 text-[11.5px] font-semibold hover:underline whitespace-nowrap flex-shrink-0 px-2 py-1 rounded bg-white border border-amber-300 shadow-2xs cursor-pointer transition hover:bg-amber-50"
-            style={{ color: "#7D4E00" }}
-          >
-            <Download size={12} /> Tải file mẫu
-          </button>
         </div>
       )}
 
@@ -554,6 +538,10 @@ export default function DataIntegrationTool() {
   const [issueGroupFilter, setIssueGroupFilter] = useState("ALL");
   const [dataSearchTerm, setDataSearchTerm] = useState("");
 
+  // Strategy selection states (Cơ chế 1, 2, 3)
+  const [selectedStrategy, setSelectedStrategy] = useState("BIPARTITE");
+  const [masterSourceIndex, setMasterSourceIndex] = useState(0);
+
   // 3 Gói cấu hình nghiệp vụ
   const [activePresetId, setActivePresetId] = useState("balanced");
   const [hoveredPresetId, setHoveredPresetId] = useState(null);
@@ -574,7 +562,7 @@ export default function DataIntegrationTool() {
 
   const parseToFileState = async (file) => {
     const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: "array" });
+    const wb = XLSX.read(buf, { type: "array", cellDates: true });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
     const headers = (rows[0] || []).map((h) => String(h));
@@ -641,9 +629,11 @@ export default function DataIntegrationTool() {
     await delay(500);
 
     const pipelineOptions = {
-      resolutionStrategy: catalogFile ? "CATALOG" : "BIPARTITE",
+      resolutionStrategy: catalogFile ? "CATALOG" : selectedStrategy,
+      masterSourceIndex,
       fuzzyHighThreshold: config.fuzzyHighThreshold,
       fuzzyConfirmThreshold: config.fuzzyConfirmThreshold,
+      priceDeviationThreshold: config.priceDeviationThreshold,
     };
 
     const { integrated, issues, issuesSummary, stats, integrationMode, strategyLabel, resolutionStats, bipartiteStats, normStats, governanceAudit, synthesizedCatalog } = runPipeline(
@@ -653,13 +643,19 @@ export default function DataIntegrationTool() {
     );
     setProcIdx(3); await delay(400);
 
-    const revenueTotal = integrated.reduce((s, r) => s + r.thanh_tien, 0);
+    // Tính doanh thu và thống kê từ các đơn hàng sạch (loại trừ đơn hủy / trả hàng)
+    const cleanRows = integrated.filter((r) => {
+      const st = (r.trang_thai || "").toLowerCase();
+      return !st.includes("hủy") && !st.includes("huy") && !st.includes("trả") && !st.includes("tra");
+    });
+
+    const revenueTotal = governanceAudit?.cleanRevenueTotal ?? cleanRows.reduce((s, r) => s + r.thanh_tien, 0);
     const channelMap = new Map();
-    integrated.forEach((r) => channelMap.set(r.kenh, (channelMap.get(r.kenh) || 0) + r.thanh_tien));
+    cleanRows.forEach((r) => channelMap.set(r.kenh, (channelMap.get(r.kenh) || 0) + r.thanh_tien));
     const revenueByChannel = [...channelMap.entries()].map(([kenh, doanhThu]) => ({ kenh, doanhThu })).sort((a, b) => b.doanhThu - a.doanhThu);
 
     const productMap = new Map();
-    integrated.forEach((r) => { const key = r.ten_sp || "(Không rõ)"; productMap.set(key, (productMap.get(key) || 0) + r.so_luong); });
+    cleanRows.forEach((r) => { const key = r.ten_sp || "(Không rõ)"; productMap.set(key, (productMap.get(key) || 0) + r.so_luong); });
     const topProducts = [...productMap.entries()].map(([ten, soLuong]) => ({ ten, soLuong })).sort((a, b) => b.soLuong - a.soLuong).slice(0, 8);
 
     const pendingConfirmations = integrated.filter((r) => r.matchStatus === "NEEDS_CONFIRMATION" || r.matchStatus === "UNRESOLVED");
@@ -712,10 +708,17 @@ export default function DataIntegrationTool() {
         }
       }
 
+      const activeIssues = r.issues.filter((iss) => {
+        if (manual?.decision === "ACCEPT" && iss.group === "entity" && iss.severity === "NEEDS_CONFIRMATION") {
+          return false;
+        }
+        return true;
+      });
+
       return [
         r.nguon, r.ma_don, r.ngay, prodName, idCode, r.thuong_hieu, r.kenh, r.trang_thai, r.so_luong, r.gia, r.thanh_tien,
         matchSt,
-        r.issues.length ? r.issues.map((iss) => `[${GROUP_LABELS[iss.group] || iss.group} | ${SEVERITY_LABELS[iss.severity]}] ${iss.detail}`).join(" | ") : "Không có",
+        activeIssues.length ? activeIssues.map((iss) => `[${GROUP_LABELS[iss.group] || iss.group} | ${SEVERITY_LABELS[iss.severity]}] ${iss.detail}`).join(" | ") : "Không có",
       ];
     });
     const csv = [headers, ...rows].map((row) => row.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -734,6 +737,11 @@ export default function DataIntegrationTool() {
   const acceptedManualCount = [...manualConfirmations.values()].filter((m) => m.decision === "ACCEPT").length;
   const liveMatchedCount = result ? ((result.stats?.matchedCount || 0) + acceptedManualCount) : 0;
   const liveMatchRate = result ? (result.stats?.totalRows ? Math.min(100, Math.round((liveMatchedCount / result.stats.totalRows) * 100)) : 0) : 0;
+
+  // Số lượng đơn hàng cần xác nhận còn lại chưa duyệt
+  const unreviewedConfirmationsCount = result
+    ? result.pendingConfirmations.filter((item, idx) => !manualConfirmations.has(item.rowIndex !== undefined ? item.rowIndex : idx)).length
+    : 0;
 
   return (
     <div className="bsi-root w-full">
@@ -880,6 +888,49 @@ export default function DataIntegrationTool() {
                         onChange={(e) => handleCustomParamChange("priceDeviationThreshold", Number(e.target.value))}
                         className="w-full accent-blue-600" />
                       <span className="text-[11px] text-gray-500 mt-0.5 block">Gắn cờ cảnh báo khi giá lệch quá {config.priceDeviationThreshold}% so với giá trong danh mục sản phẩm gốc.</span>
+                    </div>
+
+                    {/* Lựa chọn Chiến lược giải quyết thực thể */}
+                    <div className="pt-3 border-t border-blue-200">
+                      <div className="font-semibold mb-1.5 text-blue-900 flex items-center justify-between">
+                        <span>🎯 Cơ chế đối chiếu (khi không có Catalog chuẩn):</span>
+                        <span className="text-gray-400 text-[11px]">Strategy Pattern</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {[
+                          { id: "BIPARTITE", name: "Cơ chế 3: Bipartite", desc: "Ghép cặp tối ưu toàn cục (Khuyên dùng)" },
+                          { id: "CLUSTERING", name: "Cơ chế 2: Gom cụm", desc: "Tự động gom cụm đa nguồn" },
+                          { id: "MASTER_SOURCE", name: "Cơ chế 1: Nguồn chuẩn", desc: "Chọn 1 tệp đơn hàng làm chuẩn" },
+                        ].map((strat) => (
+                          <button
+                            key={strat.id}
+                            type="button"
+                            onClick={() => setSelectedStrategy(strat.id)}
+                            className={`p-2 rounded-lg text-left border text-xs transition cursor-pointer ${
+                              selectedStrategy === strat.id
+                                ? "bg-blue-700 text-white border-blue-800 font-bold shadow-xs"
+                                : "bg-white text-gray-700 border-gray-300 hover:bg-blue-100"
+                            }`}
+                          >
+                            <div className="font-bold">{strat.name}</div>
+                            <div className={`text-[10.5px] mt-0.5 ${selectedStrategy === strat.id ? "text-blue-100" : "text-gray-500"}`}>{strat.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                      {selectedStrategy === "MASTER_SOURCE" && orderFiles.length > 0 && (
+                        <div className="mt-2.5 flex items-center gap-2 p-2 bg-white rounded-lg border border-blue-200">
+                          <span className="text-[11.5px] font-semibold text-gray-700">Chọn tệp làm nguồn chuẩn:</span>
+                          <select
+                            value={masterSourceIndex}
+                            onChange={(e) => setMasterSourceIndex(Number(e.target.value))}
+                            className="text-xs p-1.5 rounded border border-gray-300 bg-white font-medium flex-1 outline-none"
+                          >
+                            {orderFiles.map((f, fIdx) => (
+                              <option key={fIdx} value={fIdx}>{f.fileName || `Tệp ${fIdx + 1}`}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1103,9 +1154,9 @@ export default function DataIntegrationTool() {
                 clickHint={result.issues.length > 0 ? "→ Nhấn để xem chi tiết" : undefined}
               />
               <StatCard
-                label="💰 Doanh Thu Thực Tế"
+                label="💰 Doanh Thu Thực Tế (Sạch)"
                 value={formatVND(result.revenueTotal)}
-                sub={`Tổng hợp từ ${orderFiles.length} kênh`}
+                sub="Đã loại trừ đơn hủy & trả hàng"
                 tone="brass"
                 icon={Banknote}
                 iconBg="#FEF9E7"
@@ -1118,7 +1169,7 @@ export default function DataIntegrationTool() {
               {[
                 { key: "overview", label: "📊 Tổng Quan", icon: BarChart3 },
                 { key: "issues", label: `⚠️ Kiểm Tra Lỗi (${result.issues.length})`, icon: ListChecks },
-                { key: "manual_confirm", label: `👆 Cần Bạn Xem (${result.pendingConfirmations.length})`, icon: ShieldCheck },
+                { key: "manual_confirm", label: `👆 Cần Bạn Xem (${unreviewedConfirmationsCount > 0 ? unreviewedConfirmationsCount : (result.pendingConfirmations.length > 0 ? "✓ Xong" : "0")})`, icon: ShieldCheck },
                 { key: "quality_report", label: "📋 Báo Cáo Chi Tiết", icon: FileText },
                 { key: "data", label: "📄 Xem Toàn Bộ Dữ Liệu", icon: Table2 },
               ].map((t) => (

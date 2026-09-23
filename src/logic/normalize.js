@@ -78,8 +78,27 @@ const DATE_PATTERNS = [
 /** Thử các định dạng ngày phổ biến ở VN, trả về chuẩn ISO (yyyy-mm-dd) hoặc null. */
 export function normalizeDate(value) {
   if (value === null || value === undefined) return null;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
   const text = String(value).trim();
   if (text === "") return null;
+
+  // Hỗ trợ số serial ngày của Excel (ví dụ 45868)
+  if (/^\d{5}$/.test(text)) {
+    const serial = parseInt(text, 10);
+    const date = new Date((serial - 25569) * 86400 * 1000);
+    if (!isNaN(date.getTime())) {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const d = String(date.getUTCDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+  }
 
   // 1. Khớp dạng chữ tiếng Việt: ngày DD tháng MM năm YYYY
   const vnMatch = text.match(/ngày\s*(\d{1,2})\s*tháng\s*(\d{1,2})\s*năm\s*(\d{4})/i);

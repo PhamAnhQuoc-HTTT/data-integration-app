@@ -19,13 +19,14 @@ import {
   normalizeBrand,
   normalizeIdCode,
   validateISBN13,
+  removeDiacritics,
 } from "./normalize";
 import { runResolutionStrategy } from "./strategies";
 
 /**
  * orderFiles: mảng { fileName, dataRows, mapping }
  * catalogFile: { dataRows, mapping } (Tùy chọn)
- * options: { resolutionStrategy, masterSourceIndex, fuzzyHighThreshold, fuzzyConfirmThreshold, crosswalk }
+ * options: { resolutionStrategy, masterSourceIndex, fuzzyHighThreshold, fuzzyConfirmThreshold, crosswalk, priceDeviationThreshold }
  */
 export function runPipeline(orderFiles, catalogFile = null, options = {}) {
   const {
@@ -34,6 +35,7 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     fuzzyConfirmThreshold = 70,
     masterSourceIndex = 0,
     crosswalk = [],
+    priceDeviationThreshold = 30,
   } = options;
 
   // 1. Gộp toàn bộ dòng từ các file đơn hàng, gắn nhãn nguồn
@@ -66,8 +68,11 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
       if (r.ma_don) {
         rawOrderIdsMap.set(r.ma_don, (rawOrderIdsMap.get(r.ma_don) || 0) + 1);
       }
-      const st = (r.trang_thai || "").toLowerCase();
-      if (st.includes("huy") || st.includes("cancel") || st.includes("tra hang") || st.includes("refund")) {
+      const normRawStatus = normalizeOrderStatus(r.trang_thai);
+      const rawText = removeDiacritics(String(r.trang_thai || "")).toLowerCase();
+      const isCancelledRaw = normRawStatus === "Đã hủy" || normRawStatus === "Trả hàng" ||
+        rawText.includes("huy") || rawText.includes("cancel") || rawText.includes("tra hang") || rawText.includes("refund");
+      if (isCancelledRaw) {
         cancelledRevenue += p * q;
       }
     });
@@ -116,6 +121,7 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
       thuong_hieu: normBrand,
       ngay: normDate,
       ma_dinh_danh: normId,
+      __raw_ngay: rawNgay,
       __raw_kenh: rawKenh,
       __raw_trang_thai: rawTrangThai,
     };
@@ -141,7 +147,8 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
   const catalog = resolutionResult.catalog;
 
   // 4. Kiểm soát chất lượng dữ liệu (6 nhóm lỗi)
-  const issues = runAllChecks(resolved);
+  const normPriceDeviation = priceDeviationThreshold > 1 ? priceDeviationThreshold / 100 : priceDeviationThreshold;
+  const issues = runAllChecks(resolved, { priceDeviationThreshold: normPriceDeviation });
   const issuesByRow = new Map();
   issues.forEach((issue) => {
     if (!issuesByRow.has(issue.rowIndex)) issuesByRow.set(issue.rowIndex, []);
@@ -159,7 +166,8 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
     const rowIssues = issuesByRow.get(i) || [];
     const lineTotal = qty * price;
 
-    const isCancelled = (row.trang_thai || "").toLowerCase().includes("hủy");
+    const normSt = normalizeOrderStatus(row.trang_thai);
+    const isCancelled = normSt === "Đã hủy" || normSt === "Trả hàng" || (row.trang_thai || "").toLowerCase().includes("hủy");
     if (!isCancelled) {
       cleanRevenueTotal += lineTotal;
     }

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { normalizeNumber, normalizeDate, normalizeIdCode, normalizeTextForMatching, normalizeOrderId, validateISBN13, normalizeChannel, normalizeOrderStatus, normalizeBrand } from "../normalize";
 import { detectFields, buildRows } from "../fieldMapping";
 import { resolveEntities, tokenSortRatio } from "../entityResolution";
-import { runAllChecks, checkDuplicates, checkMissingAttributes, checkCrossChannelPrice, checkNullVsZero, checkCategoricalMismatch, checkEncodingIssues, checkStaleData, checkReferentialIntegrity, GROUP_LABELS } from "../qualityRules";
+import { runAllChecks, checkDuplicates, checkMissingAttributes, checkCrossChannelPrice, checkNullVsZero, checkCategoricalMismatch, checkEncodingIssues, checkStaleData, checkReferentialIntegrity, checkSynonymConflict, checkStructuralConflict, checkPriceAnomaly, GROUP_LABELS } from "../qualityRules";
 import { extractUniqueEntitiesFromRows, matchBipartiteEntities, synthesizeCanonicalCatalog } from "../bipartiteMatching";
 import { executeClusteringStrategy } from "../strategies/clusteringStrategy";
 import { executeMasterSourceStrategy } from "../strategies/masterSourceStrategy";
@@ -27,6 +27,11 @@ describe("normalizeDate", () => {
   it("parses date with attached time", () => { expect(normalizeDate("29-07-2025 11:41:00")).toBe("2025-07-29"); });
   it("parses Vietnamese text date", () => { expect(normalizeDate("ngày 7 tháng 7 năm 2025")).toBe("2025-07-07"); });
   it("parses dot date format", () => { expect(normalizeDate("15.08.2025")).toBe("2025-08-15"); });
+  it("parses Date object and Excel serial date number", () => {
+    const d = new Date(2025, 6, 29);
+    expect(normalizeDate(d)).toBe("2025-07-29");
+    expect(normalizeDate("45868")).toBe("2025-07-30");
+  });
   it("returns null for invalid/empty", () => { expect(normalizeDate("")).toBeNull(); });
 });
 
@@ -116,6 +121,27 @@ describe("field mapping", () => {
     expect(mapping.ma_dinh_danh).toBe(0);
     expect(mapping.ten_sp).toBe(1);
     expect(mapping.so_luong).toBe(2);
+    expect(mapping.gia).toBe(3);
+    expect(mapping.ngay).toBe(4);
+  });
+
+  it("does not confuse 'Tác giả' with 'Giá bán'", () => {
+    const headers = ["Tên sách", "Tác giả", "Giá bán", "Số lượng"];
+    const mapping = detectFields(headers);
+    expect(mapping.ten_sp).toBe(0);
+    expect(mapping.thuong_hieu).toBe(1);
+    expect(mapping.gia).toBe(2);
+    expect(mapping.so_luong).toBe(3);
+  });
+
+  it("does not confuse 'Mã sản phẩm' with 'Tên sản phẩm'", () => {
+    const headers = ["Mã đơn", "Ngày", "Mã sản phẩm", "Tên sản phẩm", "Giá"];
+    const mapping = detectFields(headers);
+    expect(mapping.ma_don).toBe(0);
+    expect(mapping.ngay).toBe(1);
+    expect(mapping.ma_dinh_danh).toBe(2);
+    expect(mapping.ten_sp).toBe(3);
+    expect(mapping.gia).toBe(4);
   });
 
   it("builds rows from mapped data, filters fully-empty rows", () => {
@@ -214,6 +240,46 @@ describe("Strategy Pattern & Resolution Rules (Cơ chế 1, 2, 3)", () => {
     expect(pipelineRes.integrated.length).toBe(2);
     expect(pipelineRes.integrated[0].ten_sp).toBe("Đắc Nhân Tâm");
   });
+
+  it("Cơ chế 3: executeBipartiteStrategy progressively matches across 3 sources without dropping rows", () => {
+    const s1Rows = [{ ten_sp: "Sách A", ma_dinh_danh: "9780001", gia: "50000", __source: "POS" }];
+    const s2Rows = [{ ten_sp: "Sách A", ma_dinh_danh: "9780001", gia: "50000", __source: "Shopee" }];
+    const s3Rows = [
+      { ten_sp: "Sách A", ma_dinh_danh: "9780001", gia: "50000", __source: "Lazada" },
+      { ten_sp: "Sách B Độc Quyền", ma_dinh_danh: "9780002", gia: "70000", __source: "Lazada" }
+    ];
+    const all3Rows = [...s1Rows, ...s2Rows, ...s3Rows];
+    const sourceRowsMap = new Map();
+    sourceRowsMap.set("POS", s1Rows);
+    sourceRowsMap.set("Shopee", s2Rows);
+    sourceRowsMap.set("Lazada", s3Rows);
+
+    const res = executeBipartiteStrategy({ allRows: all3Rows, sourceRowsMap });
+    expect(res.resolved.length).toBe(4);
+    const lazadaRowA = res.resolved.find(r => r.__source === "Lazada" && r.ma_dinh_danh === "9780001");
+    expect(lazadaRowA.matchStatus).toBe("MATCHED_EXACT");
+    expect(lazadaRowA.matched.ten_sp).toBe("Sách A");
+    const lazadaRowB = res.resolved.find(r => r.__source === "Lazada" && r.ma_dinh_danh === "9780002");
+    expect(lazadaRowB.matchStatus).toBe("UNRESOLVED");
+  });
+
+  it("runPipeline accurately excludes accented cancelled orders from clean revenue", () => {
+    const orderFiles = [
+      {
+        fileName: "orders.xlsx",
+        dataRows: [
+          ["DH-1", "Sách 1", "9786045678901", "1", "100000", "Hoàn thành"],
+          ["DH-2", "Sách 2", "9786045678902", "1", "50000", "Đã hủy"],
+          ["DH-3", "Sách 3", "9786045678903", "1", "30000", "Trả hàng"],
+        ],
+        mapping: { ma_don: 0, ten_sp: 1, ma_dinh_danh: 2, so_luong: 3, gia: 4, trang_thai: 5 },
+      },
+    ];
+    const res = runPipeline(orderFiles, null, { resolutionStrategy: "BIPARTITE" });
+    expect(res.governanceAudit.rawRevenueTotal).toBe(180000);
+    expect(res.governanceAudit.cancelledRevenuePrevented).toBe(80000);
+    expect(res.governanceAudit.cleanRevenueTotal).toBe(100000);
+  });
 });
 
 describe("quality rules — 6 groups & severity classification", () => {
@@ -291,6 +357,29 @@ describe("quality rules — 6 groups & severity classification", () => {
     const rows = [{ ma_dinh_danh: "XX123", matchStatus: "UNRESOLVED" }];
     const issues = checkReferentialIntegrity(rows);
     expect(issues.length).toBe(1);
+  });
+
+  it("checkSynonymConflict flags AUTO_FIXED using __raw_kenh and __raw_trang_thai", () => {
+    const rows = [{ __raw_kenh: "shopee vn", kenh: "Shopee", __raw_trang_thai: "da giao", trang_thai: "Hoàn thành" }];
+    const issues = checkSynonymConflict(rows);
+    expect(issues.length).toBe(2);
+    expect(issues[0].severity).toBe("AUTO_FIXED");
+    expect(issues[1].severity).toBe("AUTO_FIXED");
+  });
+
+  it("checkStructuralConflict flags AUTO_FIXED using __raw_ngay", () => {
+    const rows = [{ __raw_ngay: "29-07-2025 11:41:00", ngay: "2025-07-29" }];
+    const issues = checkStructuralConflict(rows);
+    expect(issues.length).toBe(1);
+    expect(issues[0].severity).toBe("AUTO_FIXED");
+  });
+
+  it("checkPriceAnomaly respects custom priceDeviationThreshold option", () => {
+    const rows = [{ gia: "85000", matched: { gia_chuan: "100000" } }]; // lệch 15%
+    // Ngưỡng 30% (mặc định) -> không gắn cờ
+    expect(checkPriceAnomaly(rows, { priceDeviationThreshold: 0.3 }).length).toBe(0);
+    // Ngưỡng 10% (strict) -> gắn cờ
+    expect(checkPriceAnomaly(rows, { priceDeviationThreshold: 0.1 }).length).toBe(1);
   });
 
   it("every issue produced by runAllChecks has a valid severity AND a valid group", () => {

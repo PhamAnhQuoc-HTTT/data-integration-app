@@ -38,16 +38,67 @@ export function detectFields(headers) {
       .trim()
   );
   const mapping = { branchColumns: [] };
+  const assignedCols = new Set();
 
-  for (const [field, patterns] of Object.entries(FIELD_PATTERNS)) {
-    let idx = -1;
-    for (let i = 0; i < norm.length; i++) {
-      if (patterns.some((p) => norm[i].includes(p) || norm[i] === p)) {
-        idx = i;
-        break;
+  // Tính điểm khớp giữa 1 header chuẩn hóa và 1 field
+  const computeScore = (headerNorm, field, patterns) => {
+    if (!headerNorm) return 0;
+
+    // Loại trừ các trường hợp xung đột âm (Negative patterns)
+    if (field === "gia" && headerNorm.includes("tac gia")) return 0;
+    if (field === "gia" && (headerNorm.includes("ma ") || headerNorm.includes("don hang"))) return 0;
+    if (field === "ten_sp" && (headerNorm.startsWith("ma ") || headerNorm.includes("ma sp") || headerNorm.includes("ma san pham"))) return 0;
+    if (field === "ma_don" && headerNorm.includes("don gia")) return 0;
+    if (field === "so_luong" && headerNorm.includes("don gia")) return 0;
+
+    let bestScore = 0;
+    for (const p of patterns) {
+      if (headerNorm === p) {
+        // Khớp chính xác 100%
+        const score = 1000 + p.length;
+        if (score > bestScore) bestScore = score;
+      } else {
+        // Khớp ranh giới từ (word boundary)
+        const regex = new RegExp(`(^|\\s)${p.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}(\\s|$)`);
+        if (regex.test(headerNorm)) {
+          const score = 100 + p.length;
+          if (score > bestScore) bestScore = score;
+        } else if (p.length >= 4 && headerNorm.includes(p)) {
+          // Chuỗi con dài >= 4 ký tự
+          const score = 10 + p.length;
+          if (score > bestScore) bestScore = score;
+        }
       }
     }
-    mapping[field] = idx;
+    return bestScore;
+  };
+
+  // Thứ tự ưu tiên nhận diện để tránh tranh chấp cột
+  const fieldPriority = [
+    "ma_don", "ma_dinh_danh", "thuong_hieu", "ten_sp", "gia", "gia_chuan",
+    "so_luong", "ngay", "kenh", "trang_thai", "danh_muc"
+  ];
+
+  for (const field of fieldPriority) {
+    const patterns = FIELD_PATTERNS[field] || [];
+    let bestIdx = -1;
+    let maxScore = 0;
+
+    for (let i = 0; i < norm.length; i++) {
+      if (assignedCols.has(i)) continue;
+      const score = computeScore(norm[i], field, patterns);
+      if (score > maxScore) {
+        maxScore = score;
+        bestIdx = i;
+      }
+    }
+
+    if (bestIdx >= 0 && maxScore > 0) {
+      mapping[field] = bestIdx;
+      assignedCols.add(bestIdx);
+    } else {
+      mapping[field] = -1;
+    }
   }
 
   // Phát hiện các cột chi nhánh xuất bán (Wide format / Pivot columns)
