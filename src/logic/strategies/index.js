@@ -31,9 +31,9 @@ export const RESOLUTION_STRATEGIES = {
   },
   BIPARTITE: {
     id: "BIPARTITE",
-    name: "Cơ chế 3: Ghép cặp tối ưu toàn cục (Bipartite)",
+    name: "Cơ chế 3: Ghép cặp tham lam theo điểm (Bipartite)",
     badge: "Cơ chế 3 (Khuyên dùng)",
-    description: "Giải bài toán phân bổ tối ưu toàn cục 1-1 giữa các nguồn, loại trừ hoàn toàn tranh chấp khớp.",
+    description: "Ghép 1-1 theo điểm giảm dần; không bảo đảm tối ưu tổng trọng số.",
     execute: executeBipartiteStrategy,
   },
 };

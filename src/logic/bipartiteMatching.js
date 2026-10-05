@@ -1,14 +1,15 @@
 /**
- * Bipartite Optimal Matching Engine
- * (Cơ chế 3: Ghép cặp tối ưu toàn cục giữa các nguồn đơn hàng)
+ * Greedy Bipartite Matching Engine
+ * (Cơ chế 3: Ghép cặp tham lam theo điểm giữa các nguồn đơn hàng)
  * 
  * Áp dụng khi người dùng KHÔNG CÓ file danh mục sản phẩm chuẩn (Master Catalog).
  * Tự động đối chiếu chéo giữa các nguồn đơn hàng (ví dụ: POS vs Shopee / Lazada / FAHASA),
- * giải quyết triệt để vấn đề tranh chấp khớp (conflicts) bằng giải thuật Best-First Maximum Weight Matching,
+ * giải quyết triệt để vấn đề tranh chấp khớp (conflicts) bằng giải thuật Best-First Greedy Matching,
  * và tự động tổng hợp Danh mục sản phẩm chuẩn đại diện (Canonical Catalog).
  */
 
 import { normalizeTextForMatching, normalizeNumber, removeDiacritics } from "./normalize";
+import { bookConflict, bookEntityKey, canMatchIdentifier } from './bookMatching';
 import { tokenSortRatio, FUZZY_HIGH_THRESHOLD, FUZZY_CONFIRM_THRESHOLD } from "./entityResolution";
 
 /**
@@ -23,7 +24,7 @@ export function extractUniqueEntitiesFromRows(rows, sourceLabel) {
     const rawId = (r.ma_dinh_danh || "").replace(/[\s-]/g, "").toUpperCase();
     
     // Khóa phân nhóm: ưu tiên mã định danh, nếu không có thì dùng tên chuẩn hóa
-    const entityKey = rawId ? `ID:${rawId}` : `TITLE:${normTitle}`;
+    const entityKey = bookEntityKey(r);
     if (!normTitle && !rawId) return;
 
     if (!entityMap.has(entityKey)) {
@@ -36,11 +37,12 @@ export function extractUniqueEntitiesFromRows(rows, sourceLabel) {
         thuong_hieu: r.thuong_hieu || "",
         prices: [],
         count: 0,
-        originalRowsIndices: [idx],
+        originalRowsIndices: [],
       });
     }
 
     const item = entityMap.get(entityKey);
+    if (bookConflict(item, r)) throw new Error(`Mã ${rawId} trong nguồn ${sourceLabel} được dùng cho các phiên bản sách khác nhau. Hãy đối soát mã trước khi chạy.`);
     item.count++;
     item.originalRowsIndices.push(idx);
     
@@ -70,7 +72,7 @@ export function extractUniqueEntitiesFromRows(rows, sourceLabel) {
 }
 
 /**
- * Cơ chế 3: Ghép cặp tối ưu toàn cục (Bipartite Matching with Conflict Resolution)
+ * Cơ chế 3: Ghép cặp tham lam theo điểm (Bipartite Matching with Conflict Resolution)
  * 
  * @param {Array} entitiesA - Danh sách thực thể từ Nguồn A
  * @param {Array} entitiesB - Danh sách thực thể từ Nguồn B
@@ -93,7 +95,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
     for (const itemB of entitiesB) {
       if (matchedSetB.has(itemB.entityKey) || !itemB.ma_dinh_danh) continue;
 
-      if (itemA.ma_dinh_danh === itemB.ma_dinh_danh) {
+      if (canMatchIdentifier(itemA, itemB)) {
         matchedPairs.push({
           entityA: itemA,
           entityB: itemB,
@@ -110,7 +112,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
   }
 
   // -------------------------------------------------------------
-  // Bước 2: Ghép cặp tối ưu toàn cục (Bipartite Conflict-Free Matching)
+  // Bước 2: Ghép cặp tham lam theo điểm (Bipartite Conflict-Free Matching)
   // -------------------------------------------------------------
   const candidatePairs = [];
 
@@ -118,7 +120,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
     if (matchedSetA.has(itemA.entityKey) || !itemA.ten_sp_norm) continue;
 
     for (const itemB of entitiesB) {
-      if (matchedSetB.has(itemB.entityKey) || !itemB.ten_sp_norm) continue;
+      if (matchedSetB.has(itemB.entityKey) || !itemB.ten_sp_norm || bookConflict(itemA, itemB)) continue;
 
       const score = tokenSortRatio(itemA.ten_sp_norm, itemB.ten_sp_norm);
       if (score >= confirmThreshold) {
@@ -131,7 +133,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
     }
   }
 
-  // Sắp xếp các cặp theo điểm tương đồng giảm dần (Best-First Global Optimal Assignment)
+  // Sắp xếp các cặp theo điểm tương đồng giảm dần (Best-First Greedy Assignment)
   candidatePairs.sort((a, b) => b.score - a.score);
 
   for (const pair of candidatePairs) {
@@ -143,8 +145,11 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
       continue;
     }
 
-    const status = pair.score >= highThreshold ? "MATCHED_FUZZY_HIGH" : "NEEDS_CONFIRMATION";
-    const tier = pair.score >= highThreshold ? "tier3_fuzzy_high" : "tier3_fuzzy_confirm";
+    const ambiguous = candidatePairs.some(other => other !== pair &&
+      (other.entityA.entityKey === keyA || other.entityB.entityKey === keyB) &&
+      other.score >= pair.score - 5);
+    const status = pair.score >= highThreshold && !ambiguous ? "MATCHED_FUZZY_HIGH" : "NEEDS_CONFIRMATION";
+    const tier = status === 'MATCHED_FUZZY_HIGH' ? "tier3_fuzzy_high" : "tier3_fuzzy_confirm";
 
     matchedPairs.push({
       entityA: pair.entityA,

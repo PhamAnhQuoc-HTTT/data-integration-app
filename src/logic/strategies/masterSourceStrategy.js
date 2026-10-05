@@ -29,6 +29,7 @@ export function executeMasterSourceStrategy({
   }));
 
   const resolved = resolveEntities(allRows, catalog, {
+    masterSource: masterFileName,
     crosswalk,
     idField: "ma_dinh_danh",
     titleField: "ten_sp",

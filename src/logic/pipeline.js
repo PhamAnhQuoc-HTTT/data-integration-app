@@ -1,251 +1,129 @@
-/**
- * Pipeline chính: gộp dữ liệu từ nhiều file đơn hàng + đối chiếu danh mục chuẩn
- * + kiểm soát chất lượng dữ liệu -> dataset tích hợp + báo cáo chất lượng quản trị.
- *
- * Phục vụ trực tiếp 3 Câu hỏi nghiên cứu (Research Questions):
- *   - RQ1: Hiệu quả ánh xạ & 7 nhóm chuẩn hóa dữ liệu.
- *   - RQ2: Đánh giá cải thiện của đối chiếu thực thể nhiều tầng vs Exact Matching.
- *   - RQ3: Đánh giá mức độ giảm sai lệch trong các báo cáo quản trị doanh thu & sản phẩm.
- */
+import { buildRows } from './fieldMapping';
+import { runAllChecks, summarizeIssues } from './qualityRules';
+import { normalizeNumber, normalizeDate, normalizeOrderId, normalizeChannel, normalizeOrderStatus, normalizeBrand, normalizeIdCode, normalizeText, validateISBN13 } from './normalize';
+import { runResolutionStrategy } from './strategies';
 
-import { buildRows } from "./fieldMapping";
-import { runAllChecks, summarizeIssues } from "./qualityRules";
-import {
-  normalizeNumber,
-  normalizeDate,
-  normalizeOrderId,
-  normalizeChannel,
-  normalizeOrderStatus,
-  normalizeBrand,
-  normalizeIdCode,
-  validateISBN13,
-  removeDiacritics,
-} from "./normalize";
-import { runResolutionStrategy } from "./strategies";
+const accepted = status => ['MATCHED_EXACT', 'MATCHED_FUZZY_HIGH', 'MATCHED_CONFIRMED_USER'].includes(status);
+const present = value => value != null && String(value).trim() !== '';
 
-/**
- * orderFiles: mảng { fileName, dataRows, mapping }
- * catalogFile: { dataRows, mapping } (Tùy chọn)
- * options: { resolutionStrategy, masterSourceIndex, fuzzyHighThreshold, fuzzyConfirmThreshold, crosswalk, priceDeviationThreshold }
- */
-export function runPipeline(orderFiles, catalogFile = null, options = {}) {
-  const {
-    resolutionStrategy = "BIPARTITE",
-    fuzzyHighThreshold = 90,
-    fuzzyConfirmThreshold = 70,
-    masterSourceIndex = 0,
-    crosswalk = [],
-    priceDeviationThreshold = 30,
-  } = options;
+/** Complete transactions only. Unknown statuses and wide-format quantities are not sales evidence. */
+export function revenueDisposition(row) {
+  if (row._isUnpivoted) return 'UNKNOWN_DATA_TYPE';
+  const q = normalizeNumber(row.so_luong), p = normalizeNumber(row.gia);
+  if (q === null || p === null || q <= 0 || !Number.isInteger(q) || p < 0) return 'INVALID_VALUE';
+  const status = normalizeOrderStatus(row.trang_thai);
+  if (status === 'Đã hủy' || status === 'Trả hàng') return 'CANCELLED';
+  return status === 'Hoàn thành' ? 'INCLUDED' : 'UNCONFIRMED_STATUS';
+}
 
-  // 1. Gộp toàn bộ dòng từ các file đơn hàng, gắn nhãn nguồn
-  let allRows = [];
-  const sourceRowsMap = new Map();
-
-  // Thống kê thô ban đầu phục vụ đánh giá RQ3 (Pre-integration Baseline)
-  let rawRevenueTotal = 0;
-  let rawUniqueTitles = new Set();
-  let rawOrderIdsMap = new Map();
-  let cancelledRevenue = 0;
-
-  orderFiles.forEach((file, idx) => {
-    const label = file.fileName || `Tệp ${idx + 1}`;
-    const channelOverride = file.channelLabel ? file.channelLabel.trim() : null;
-    const rows = buildRows(file.dataRows, file.mapping).map((r) => ({
-      ...r,
-      __source: label,
-      __sourceIndex: idx,
-      __channelLabel: channelOverride,
-    }));
-    sourceRowsMap.set(label, rows);
-    allRows = allRows.concat(rows);
-
-    rows.forEach((r) => {
-      const p = normalizeNumber(r.gia) || 0;
-      const q = normalizeNumber(r.so_luong) || 0;
-      rawRevenueTotal += p * q;
-      if (r.ten_sp) rawUniqueTitles.add(r.ten_sp.trim());
-      if (r.ma_don) {
-        rawOrderIdsMap.set(r.ma_don, (rawOrderIdsMap.get(r.ma_don) || 0) + 1);
-      }
-      const normRawStatus = normalizeOrderStatus(r.trang_thai);
-      const rawText = removeDiacritics(String(r.trang_thai || "")).toLowerCase();
-      const isCancelledRaw = normRawStatus === "Đã hủy" || normRawStatus === "Trả hàng" ||
-        rawText.includes("huy") || rawText.includes("cancel") || rawText.includes("tra hang") || rawText.includes("refund");
-      if (isCancelledRaw) {
-        cancelledRevenue += p * q;
-      }
-    });
+function finalize(base, decisions = new Map()) {
+  const resolved = base.resolved.map((row, i) => {
+    const decision = decisions.get(i)?.decision;
+    if (decision === 'ACCEPT' && row.matched && row.matchStatus === 'NEEDS_CONFIRMATION') return { ...row, matchStatus: 'MATCHED_CONFIRMED_USER' };
+    if (decision === 'REJECT' && row.matched && row.matchStatus === 'NEEDS_CONFIRMATION') return { ...row, matchStatus: 'REJECTED_USER', matched: null };
+    return { ...row };
   });
-
-  // 2. Thống kê 7 nhóm chuẩn hóa phục vụ RQ1
-  let normStats = {
-    idCount: 0,
-    textCount: 0,
-    numberCount: 0,
-    dateCount: 0,
-    channelCount: 0,
-    statusCount: 0,
-    structureCount: 0,
-    encodingFixedCount: 0,
-  };
-
-  // Áp dụng 7 nhóm chuẩn hóa dữ liệu
-  allRows = allRows.map((row) => {
-    const rawKenh = row.kenh;
-    const rawTrangThai = row.trang_thai;
-    const rawNgay = row.ngay;
-    const rawTen = row.ten_sp;
-    const rawId = row.ma_dinh_danh;
-
-    const normId = normalizeIdCode(rawId);
-    const normOrderId = normalizeOrderId(row.ma_don);
-    const normKenh = row.__channelLabel || normalizeChannel(row.kenh) || row.__source;
-    const normStatus = normalizeOrderStatus(row.trang_thai);
-    const normBrand = normalizeBrand(row.thuong_hieu);
-    const normDate = normalizeDate(row.ngay) || row.ngay;
-
-    if (normId !== rawId) normStats.idCount++;
-    if (normBrand !== row.thuong_hieu || (rawTen && rawTen.trim() !== rawTen)) normStats.textCount++;
-    if (normDate !== rawNgay) normStats.dateCount++;
-    if (normKenh !== rawKenh) normStats.channelCount++;
-    if (normStatus !== rawTrangThai) normStats.statusCount++;
-    if (row._isUnpivoted) normStats.structureCount++;
-    if (row.ma_don && normOrderId !== row.ma_don) normStats.encodingFixedCount++;
-
-    return {
-      ...row,
-      ma_don: normOrderId,
-      kenh: normKenh,
-      trang_thai: normStatus,
-      thuong_hieu: normBrand,
-      ngay: normDate,
-      ma_dinh_danh: normId,
-      __raw_ngay: rawNgay,
-      __raw_kenh: rawKenh,
-      __raw_trang_thai: rawTrangThai,
-    };
+  const issues = runAllChecks(resolved, base.qualityOptions);
+  resolved.forEach((row, i) => {
+    const code = normalizeIdCode(row.ma_dinh_danh);
+    if (/^(978|979)\d{10}$/.test(code || '') && !validateISBN13(code).valid) {
+      issues.push({ rowIndex: i, group: 'value', severity: 'FLAGGED_ONLY', detail: `ISBN-13 sai checksum: ${code}` });
+    }
+    if (row._isUnpivoted) issues.push({ rowIndex: i, group: 'schema', severity: 'FLAGGED_ONLY', detail: 'Bảng ngang tham khảo: chưa xác định ý nghĩa số lượng, không tính doanh thu.' });
+    if (!present(row.ma_don)) issues.push({ rowIndex: i, group: 'value', severity: 'FLAGGED_ONLY', detail: 'Thiếu mã đơn; không suy đoán mã giao dịch.' });
   });
-
-  // 3. Thực thi Đối Chiếu Thực Thể (Strategy Pattern Dispatcher)
-  const targetStrategyKey = (catalogFile && catalogFile.dataRows && catalogFile.dataRows.length > 0)
-    ? "CATALOG"
-    : resolutionStrategy;
-
-  const resolutionResult = runResolutionStrategy(targetStrategyKey, {
-    allRows,
-    catalogFile,
-    orderFiles,
-    sourceRowsMap,
-    masterSourceIndex,
-    fuzzyHighThreshold,
-    fuzzyConfirmThreshold,
-    crosswalk,
-  });
-
-  const resolved = resolutionResult.resolved;
-  const catalog = resolutionResult.catalog;
-
-  // 4. Kiểm soát chất lượng dữ liệu (6 nhóm lỗi)
-  const normPriceDeviation = priceDeviationThreshold > 1 ? priceDeviationThreshold / 100 : priceDeviationThreshold;
-  const issues = runAllChecks(resolved, { priceDeviationThreshold: normPriceDeviation });
-  const issuesByRow = new Map();
-  issues.forEach((issue) => {
-    if (!issuesByRow.has(issue.rowIndex)) issuesByRow.set(issue.rowIndex, []);
-    issuesByRow.get(issue.rowIndex).push(issue);
-  });
-
-  // 5. Xây dataset tích hợp cuối cùng & Đánh giá sai lệch báo cáo (RQ3)
-  let cleanRevenueTotal = 0;
-  let cleanUniqueProducts = new Set();
-  let duplicateRevenueDiscrepancy = 0;
-
+  const byRow = new Map();
+  issues.forEach(issue => { if (!byRow.has(issue.rowIndex)) byRow.set(issue.rowIndex, []); byRow.get(issue.rowIndex).push(issue); });
   const integrated = resolved.map((row, i) => {
-    const qty = normalizeNumber(row.so_luong) || 0;
-    const price = normalizeNumber(row.gia) || 0;
-    const rowIssues = issuesByRow.get(i) || [];
-    const lineTotal = qty * price;
-
-    const normSt = normalizeOrderStatus(row.trang_thai);
-    const isCancelled = normSt === "Đã hủy" || normSt === "Trả hàng" || (row.trang_thai || "").toLowerCase().includes("hủy");
-    if (!isCancelled) {
-      cleanRevenueTotal += lineTotal;
-    }
-
-    const isDuplicate = (rawOrderIdsMap.get(row.ma_don) || 0) > 1;
-    if (isDuplicate) {
-      duplicateRevenueDiscrepancy += lineTotal / 2; // tính phần thừa trùng lặp
-    }
-
-    const finalTitle = row.matched ? row.matched.ten_sp : row.ten_sp;
-    if (finalTitle) cleanUniqueProducts.add(finalTitle);
-
-    const idCode = row.matched ? row.matched.ma_dinh_danh : row.ma_dinh_danh;
-    if (idCode) {
-      const cleanId = String(idCode).replace(/[\s-]/g, "");
-      // Chỉ kiểm tra ISBN-13 khi mã bắt đầu bằng 978 hoặc 979 (tiêu chuẩn sách quốc tế)
-      if (/^(978|979)\d{10}$/.test(cleanId)) {
-        const result = validateISBN13(cleanId);
-        if (!result.valid) {
-          rowIssues.push({
-            rowIndex: i,
-            group: "value",
-            severity: "FLAGGED_ONLY",
-            detail: `Mã ISBN-13 "${cleanId}" không hợp lệ (sai số kiểm tra checksum)`,
-          });
-        }
-      }
-    }
-
+    const product = accepted(row.matchStatus) ? row.matched : null;
+    const qty = normalizeNumber(row.so_luong), price = normalizeNumber(row.gia);
     return {
-      id: i,
-      rowIndex: i,
-      nguon: row.__source,
-      ma_don: row.ma_don,
-      ngay: row.ngay,
-      ten_sp: finalTitle,
-      ma_dinh_danh: idCode,
-      thuong_hieu: row.matched ? row.matched.thuong_hieu : row.thuong_hieu,
-      kenh: row.kenh || row.__source,
-      trang_thai: row.trang_thai,
-      so_luong: qty,
-      gia: price,
-      thanh_tien: lineTotal,
-      matchStatus: row.matchStatus,
-      matchScore: row.matchScore,
-      matchTier: row.matchTier,
-      issues: rowIssues,
+      ...row, id: i, rowIndex: i, nguon: row.__sourceName,
+      original: base.resolved[i],
+      ten_sp: product?.ten_sp || row.ten_sp,
+      ma_dinh_danh: product?.ma_dinh_danh || row.ma_dinh_danh,
+      thuong_hieu: product?.thuong_hieu || row.thuong_hieu,
+      productKey: product ? `CAT:${base.catalog.findIndex(c => c === product || (c.ma_dinh_danh === product.ma_dinh_danh && c.ten_sp === product.ten_sp))}` : `SOURCE:${row.__source}:${row.ma_dinh_danh || row.ten_sp || i}`,
+      so_luong: qty, gia: price,
+      thanh_tien: qty === null || price === null ? null : qty * price,
+      revenueDisposition: revenueDisposition(row),
+      issues: byRow.get(i) || [],
     };
   });
-
-  // Báo cáo đo lường giảm sai lệch quản trị (RQ3 Governance Evaluation)
-  const governanceAudit = {
-    rawRevenueTotal,
-    cleanRevenueTotal,
-    revenueDiscrepancyPrevented: rawRevenueTotal - cleanRevenueTotal,
-    cancelledRevenuePrevented: cancelledRevenue,
-    duplicateRevenueDiscrepancy,
-    rawUniqueTitlesCount: rawUniqueTitles.size,
-    cleanUniqueProductsCount: cleanUniqueProducts.size,
-    productFragmentationReduced: Math.max(0, rawUniqueTitles.size - cleanUniqueProducts.size),
-  };
-
+  const sum = rows => rows.reduce((s, r) => s + (r.thanh_tien ?? 0), 0);
+  const eligibleValues = integrated.filter(r => !r._isUnpivoted && r.thanh_tien !== null && r.so_luong > 0 && Number.isInteger(r.so_luong) && r.gia >= 0);
+  const cleanRows = integrated.filter(r => r.revenueDisposition === 'INCLUDED');
+  const rawRevenueTotal = sum(eligibleValues), cleanRevenueTotal = sum(cleanRows);
+  const cancelledRevenuePrevented = sum(integrated.filter(r => r.revenueDisposition === 'CANCELLED'));
+  const rawTitles = new Set(base.resolved.map(r => r.__raw_ten_sp || r.ten_sp).filter(Boolean));
+  const products = new Set(integrated.map(r => r.productKey));
+  const duplicateRows = new Set(issues.filter(i => i.group === 'technical' && i.severity === 'NEEDS_CONFIRMATION').map(i => i.rowIndex));
+  const channels = new Map(), top = new Map();
+  cleanRows.forEach(r => {
+    const channel = r.kenh || '(Thiếu kênh)';
+    channels.set(channel, (channels.get(channel) || 0) + r.thanh_tien);
+    const item = top.get(r.productKey) || { ten: r.ten_sp || '(Thiếu tên)', soLuong: 0 };
+    item.soLuong += r.so_luong; top.set(r.productKey, item);
+  });
   return {
-    integrated,
-    issues,
-    issuesSummary: summarizeIssues(issues),
-    integrationMode: resolutionResult.strategyKey,
-    strategyLabel: resolutionResult.strategyLabel,
-    resolutionStats: resolutionResult.resolutionStats || null,
-    bipartiteStats: resolutionResult.bipartiteStats || null,
-    clustersStats: resolutionResult.clustersStats || null,
-    synthesizedCatalog: catalog,
-    normStats,
-    governanceAudit,
-    stats: {
-      totalRows: integrated.length,
-      catalogSize: catalog.length,
-      matchedCount: integrated.filter((r) => r.matchStatus === "MATCHED_EXACT" || r.matchStatus === "MATCHED_FUZZY_HIGH").length,
+    ...base.metadata, _base: base, integrated, issues, issuesSummary: summarizeIssues(issues),
+    synthesizedCatalog: base.catalog, normStats: base.normStats,
+    governanceAudit: {
+      rawRevenueTotal, cleanRevenueTotal, cancelledRevenuePrevented,
+      revenueDiscrepancyPrevented: rawRevenueTotal - cleanRevenueTotal,
+      unconfirmedRevenue: rawRevenueTotal - cleanRevenueTotal - cancelledRevenuePrevented,
+      duplicateRevenueDiscrepancy: sum(integrated.filter(r => duplicateRows.has(r.rowIndex) && r.revenueDisposition === 'INCLUDED')),
+      excludedRowsCount: integrated.length - cleanRows.length,
+      rawUniqueTitlesCount: rawTitles.size, cleanUniqueProductsCount: products.size,
+      productFragmentationReduced: Math.max(0, rawTitles.size - products.size),
     },
+    stats: { totalRows: integrated.length, catalogSize: base.catalog.length, matchedCount: integrated.filter(r => accepted(r.matchStatus)).length },
+    revenueTotal: cleanRevenueTotal,
+    revenueByChannel: [...channels].map(([kenh, doanhThu]) => ({kenh, doanhThu})).sort((a,b) => b.doanhThu-a.doanhThu),
+    topProducts: [...top.values()].sort((a,b) => b.soLuong-a.soLuong).slice(0,8),
+    pendingConfirmations: integrated.filter(r => ['NEEDS_CONFIRMATION','UNRESOLVED','MATCHED_CONFIRMED_USER','REJECTED_USER'].includes(r.matchStatus)),
   };
+}
+
+export function applyManualDecisions(result, decisions) {
+  return { ...result, ...finalize(result._base, decisions) };
+}
+
+export function runPipeline(orderFiles, catalogFile = null, options = {}) {
+  const { resolutionStrategy = 'BIPARTITE', fuzzyHighThreshold = 90, fuzzyConfirmThreshold = 70, masterSourceIndex = 0, crosswalk = [], priceDeviationThreshold = 30 } = options;
+  if (fuzzyConfirmThreshold > fuzzyHighThreshold) throw new Error('Ngưỡng cần duyệt phải nhỏ hơn hoặc bằng ngưỡng tự động ghép.');
+  const normStats = { idCount: 0, textCount: 0, numberCount: 0, dateCount: 0, channelCount: 0, statusCount: 0, structureCount: 0, encodingFixedCount: 0 };
+  const sourceRowsMap = new Map();
+  const preparedFiles = orderFiles.map((file, idx) => ({ ...file, sourceName: file.fileName || `Tệp ${idx+1}`, fileName: `SOURCE-${idx}` }));
+  const allRows = preparedFiles.flatMap((file, idx) => {
+    const rows = buildRows(file.dataRows, file.mapping).map(row => {
+      const values = {
+        ma_don: normalizeOrderId(row.ma_don), ma_dinh_danh: normalizeIdCode(row.ma_dinh_danh),
+        ten_sp: normalizeText(row.ten_sp), thuong_hieu: normalizeBrand(row.thuong_hieu),
+        ten_ncc: normalizeText(row.ten_ncc), ma_ncc: normalizeText(row.ma_ncc), tac_gia: normalizeText(row.tac_gia),
+        ngay: normalizeDate(row.ngay) || (row.ngay instanceof Date ? String(row.ngay) : row.ngay),
+        kenh: normalizeChannel(row.kenh) || normalizeChannel(file.channelLabel),
+        trang_thai: normalizeOrderStatus(row.trang_thai),
+      };
+      const count = (field, bucket) => { if (present(row[field]) && values[field] !== row[field]) normStats[bucket]++; };
+      count('ma_dinh_danh','idCount'); count('ma_don','idCount'); count('ten_sp','textCount'); count('thuong_hieu','textCount');
+      count('ngay','dateCount'); count('kenh','channelCount'); count('trang_thai','statusCount');
+      ['gia','so_luong'].forEach(f => { if (present(row[f]) && normalizeNumber(row[f]) !== null && String(normalizeNumber(row[f])) !== String(row[f])) normStats.numberCount++; });
+      if (row._isUnpivoted) normStats.structureCount++;
+      return { ...row, ...values, __source: file.fileName, __sourceName: file.sourceName, __sourceIndex: idx,
+        __raw_ma_dinh_danh: row.ma_dinh_danh, __raw_ten_sp: row.ten_sp, __raw_ngay: row.ngay, __raw_kenh: row.kenh, __raw_trang_thai: row.trang_thai };
+    });
+    sourceRowsMap.set(file.fileName, rows); return rows;
+  });
+  if (!allRows.length) throw new Error('Không có dòng dữ liệu để xử lý. Kiểm tra tiêu đề và cấu trúc tệp.');
+  const strategyKey = catalogFile?.dataRows?.length ? 'CATALOG' : resolutionStrategy;
+  if (crosswalk.length && !['CATALOG','MASTER_SOURCE'].includes(strategyKey)) throw new Error('Crosswalk cần Catalog hoặc chiến lược Master Source.');
+  if (strategyKey === 'CATALOG' && !catalogFile?.dataRows?.length) throw new Error('Danh mục chuẩn rỗng.');
+  const result = runResolutionStrategy(strategyKey, { allRows, catalogFile, orderFiles: preparedFiles, sourceRowsMap, masterSourceIndex, fuzzyHighThreshold, fuzzyConfirmThreshold, crosswalk });
+  const referenceRows = result.resolved.map(row => ({...row, __hasReferenceCatalog: ['CATALOG', 'MASTER_SOURCE'].includes(strategyKey)}));
+  return finalize({
+    resolved: referenceRows, catalog: result.catalog, normStats,
+    qualityOptions: { priceDeviationThreshold: priceDeviationThreshold / 100 },
+    metadata: { runConfig: { fuzzyHighThreshold, fuzzyConfirmThreshold, priceDeviationThreshold }, integrationMode: result.strategyKey, strategyLabel: result.strategyLabel, resolutionStats: result.resolutionStats || null, bipartiteStats: result.bipartiteStats || null, clustersStats: result.clustersStats || null },
+  });
 }

@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 export function formatVND(n) {
-  return isNaN(n) ? "—" : Math.round(n).toLocaleString("vi-VN") + " ₫";
+  return n == null || !Number.isFinite(Number(n)) ? "—" : Math.round(n).toLocaleString("vi-VN") + " ₫";
 }
 
 export function MetricStatCards({
@@ -23,8 +23,7 @@ export function MetricStatCards({
 }) {
   const cancelledPrevented = result.governanceAudit?.cancelledRevenuePrevented || 0;
   const issuesCount = result.issues?.length || 0;
-  const hasCatalog = result.stats?.catalogSize > 0;
-  const isSingleSourceWithoutCatalog = orderFilesCount <= 1 && !hasCatalog;
+  const isSingleSourceWithoutCatalog = orderFilesCount <= 1 && result.integrationMode === "BIPARTITE";
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -144,7 +143,7 @@ export function MetricStatCards({
       <div className="bg-white border border-slate-200/90 rounded-xl px-5 sm:px-6 py-4.5 shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between min-h-[138px]">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11.5px] font-bold text-slate-500 uppercase tracking-wider">
-            Doanh Thu Thực Tế (Sạch)
+            Giá trị bán đủ điều kiện
           </span>
           <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
             <Banknote size={17} />
@@ -166,7 +165,7 @@ export function MetricStatCards({
               Đã trừ {formatVND(cancelledPrevented)} đơn hủy
             </span>
           ) : (
-            <span>Đã loại trừ đơn hủy & trả</span>
+            <span>Chỉ dòng hoàn thành, giá/SL hợp lệ</span>
           )}
         </div>
       </div>

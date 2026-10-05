@@ -4,6 +4,7 @@
  */
 import { buildCatalog } from "../fieldMapping";
 import { resolveEntities } from "../entityResolution";
+import { validateCatalog } from '../catalogValidation';
 
 export function executeCatalogStrategy({
   allRows,
@@ -12,7 +13,7 @@ export function executeCatalogStrategy({
   fuzzyHighThreshold = 90,
   fuzzyConfirmThreshold = 70,
 }) {
-  const catalog = buildCatalog(catalogFile.dataRows, catalogFile.mapping);
+  const catalog = validateCatalog(buildCatalog(catalogFile.dataRows, catalogFile.mapping));
   const resolved = resolveEntities(allRows, catalog, {
     crosswalk,
     idField: "ma_dinh_danh",

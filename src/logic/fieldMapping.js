@@ -8,7 +8,10 @@ export const FIELD_PATTERNS = {
   ma_don: ["ma don hang", "ma don", "ma hoa don", "order id", "order", "ma dh", "so don", "ma giao dich", "invoice id", "invoice"],
   ngay: ["ngay gio", "ngay dat", "ngay ban", "ngay", "date", "created at", "created", "order date", "time", "timestamp"],
   ten_sp: ["ten san pham", "san pham", "ten hang", "ten sp", "tieu de", "ten", "product name", "product", "item name", "title"],
-  thuong_hieu: ["ten ncc", "nha cung cap", "ncc", "ma ncc", "thuong hieu", "nha san xuat", "nha xuat ban", "nxb", "tac gia", "brand", "publisher", "manufacturer", "author", "vendor"],
+  thuong_hieu: ["thuong hieu", "nha xuat ban", "nxb", "brand", "publisher"],
+  ten_ncc: ["ten ncc", "nha cung cap", "supplier", "vendor"],
+  ma_ncc: ["ma ncc", "supplier id"],
+  tac_gia: ["tac gia", "author"],
   so_luong: ["so luong", "sl", "qty", "quantity", "count", "amount"],
   gia: ["gia ban", "don gia", "gia", "price", "unit price", "gia bia", "gia niem yet", "cost", "selling price"],
   ma_dinh_danh: ["barcode", "isbn", "ma vach", "upc", "ean", "sku id", "sku", "ma dinh danh", "ma san pham chuan", "ma sp chuan", "ma san pham", "ma sp", "item code"],
@@ -22,6 +25,7 @@ export const FIELD_LABELS = {
   ma_don: "Mã đơn", ngay: "Ngày", ten_sp: "Tên sản phẩm", thuong_hieu: "Thương hiệu/NCC",
   so_luong: "Số lượng", gia: "Giá bán", ma_dinh_danh: "Mã định danh",
   kenh: "Kênh", danh_muc: "Danh mục", gia_chuan: "Giá chuẩn", trang_thai: "Trạng thái",
+  ten_ncc: "Nhà cung cấp", ma_ncc: "Mã NCC", tac_gia: "Tác giả",
 };
 
 /**
@@ -43,6 +47,8 @@ export function detectFields(headers) {
   // Tính điểm khớp giữa 1 header chuẩn hóa và 1 field
   const computeScore = (headerNorm, field, patterns) => {
     if (!headerNorm) return 0;
+    if (field === "gia" && /gia bia|gia niem yet|gia chuan|list price/.test(headerNorm)) return 0;
+    if (field === "ma_don" && /status|date|time|trang thai/.test(headerNorm)) return 0;
 
     // Loại trừ các trường hợp xung đột âm (Negative patterns)
     if (field === "gia" && headerNorm.includes("tac gia")) return 0;
@@ -75,7 +81,7 @@ export function detectFields(headers) {
 
   // Thứ tự ưu tiên nhận diện để tránh tranh chấp cột
   const fieldPriority = [
-    "ma_don", "ma_dinh_danh", "thuong_hieu", "ten_sp", "gia", "gia_chuan",
+    "ma_don", "ma_dinh_danh", "ma_ncc", "ten_ncc", "tac_gia", "thuong_hieu", "ten_sp", "gia_chuan", "gia",
     "so_luong", "ngay", "kenh", "trang_thai", "danh_muc"
   ];
 
@@ -108,7 +114,7 @@ export function detectFields(headers) {
     const n = removeDiacritics(raw).toLowerCase();
     
     // Nếu là cột chi nhánh có mã GDNS hoặc NS FAHASA hoặc Chi nhánh
-    if ((n.includes("gdns") || n.includes("ns fahasa") || n.includes("chi nhanh")) && idx !== mapping.ten_sp && idx !== mapping.thuong_hieu) {
+    if (/^gdns\w*\b/.test(n) || /^ns fahasa\s+\S/.test(n)) {
       // Trích xuất tên rút gọn dễ đọc cho chi nhánh
       let cleanBranchName = raw;
       if (raw.includes("-")) {
@@ -131,33 +137,35 @@ export function detectFields(headers) {
  */
 export function buildRows(dataRows, mapping) {
   const rows = [];
-  const get = (r, f) => (mapping[f] >= 0 ? String(r[mapping[f]] ?? "").trim() : "");
+  const get = (r, f) => mapping[f] >= 0 ? (r[mapping[f]] ?? "") : "";
 
   dataRows.forEach((r, rowIdx) => {
     const ten_sp = get(r, "ten_sp");
     const ma_dinh_danh = get(r, "ma_dinh_danh");
     const raw_ma_don = get(r, "ma_don");
-    const ma_don = raw_ma_don || `ROW-${rowIdx + 1}`;
+    const ma_don = raw_ma_don || "";
     const ngay = get(r, "ngay");
     const thuong_hieu = get(r, "thuong_hieu");
-    const gia = get(r, "gia") || get(r, "gia_chuan");
-    const trang_thai = get(r, "trang_thai") || "Hoàn thành";
+    const gia = get(r, "gia");
+    const trang_thai = get(r, "trang_thai");
+    const metadata = { __sourceRow: rowIdx + 2, gia_bia: get(r, "gia_chuan"), ten_ncc: get(r, "ten_ncc"), ma_ncc: get(r, "ma_ncc"), tac_gia: get(r, "tac_gia"), __raw: [...r] };
 
     // Trường hợp 1: File có các cột chi nhánh phân phối (Wide format như FAHASA)
     if (mapping.branchColumns && mapping.branchColumns.length > 0) {
-      if (ten_sp || ma_dinh_danh) {
+      if (r.some(v => String(v ?? "").trim())) {
         mapping.branchColumns.forEach((branch, bIdx) => {
           const qtyVal = String(r[branch.index] ?? "").trim();
-          const numQty = parseFloat(qtyVal.replace(/[^\d.-]/g, ""));
 
           // Chỉ sinh dòng giao dịch khi số lượng > 0
-          if (!isNaN(numQty) && numQty > 0) {
+          if (qtyVal !== "") {
             rows.push({
-              ma_don: `${ma_don}-BR${bIdx + 1}`,
-              ngay: ngay || "2025-07-01",
+              ...metadata,
+              __branchIndex: bIdx,
+              ma_don,
+              ngay,
               ten_sp,
               thuong_hieu,
-              so_luong: numQty,
+              so_luong: qtyVal,
               gia,
               ma_dinh_danh,
               kenh: branch.branchName,
@@ -173,8 +181,9 @@ export function buildRows(dataRows, mapping) {
       const so_luong = get(r, "so_luong");
       const kenh = get(r, "kenh");
 
-      if (ten_sp || raw_ma_don || ma_dinh_danh) {
+      if (r.some(v => String(v ?? "").trim())) {
         rows.push({
+          ...metadata,
           ma_don,
           ngay,
           ten_sp,

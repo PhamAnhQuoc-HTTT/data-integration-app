@@ -15,8 +15,10 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { detectFields } from "./logic/fieldMapping";
-import { runPipeline } from "./logic/pipeline";
-import { SEVERITY_LABELS, GROUP_LABELS } from "./logic/qualityRules";
+import { runPipeline, applyManualDecisions } from "./logic/pipeline";
+import { parseCrosswalk } from './logic/crosswalk';
+import { reconciliationCounts } from './logic/reconciliation';
+import { getExportData, csvCell } from "./logic/exportData";
 
 // Components
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
@@ -40,6 +42,7 @@ export default function App() {
   const [step, setStep] = useState("upload"); // "upload" | "processing" | "results"
   const [orderFiles, setOrderFiles] = useState([]);
   const [catalogFile, setCatalogFile] = useState(null);
+  const [crosswalk, setCrosswalk] = useState([]);
   const [dragOverKey, setDragOverKey] = useState(null);
   const [procIdx, setProcIdx] = useState(0);
   const [result, setResult] = useState(null);
@@ -77,7 +80,8 @@ export default function App() {
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
     const headers = (rows[0] || []).map((h) => String(h));
-    const dataRows = rows.slice(1).filter((r) => r.some((c) => String(c).trim() !== ""));
+    // Preserve blank row positions so exported source row numbers remain accurate.
+    const dataRows = rows.slice(1);
     const mapping = detectFields(headers);
     return { fileName: file.name, headers, dataRows, mapping };
   };
@@ -122,6 +126,7 @@ export default function App() {
   const reset = () => {
     setOrderFiles([]);
     setCatalogFile(null);
+    setCrosswalk([]);
     setResult(null);
     setStep("upload");
     setActiveTab("overview");
@@ -157,172 +162,39 @@ export default function App() {
       fuzzyHighThreshold: config.fuzzyHighThreshold,
       fuzzyConfirmThreshold: config.fuzzyConfirmThreshold,
       priceDeviationThreshold: config.priceDeviationThreshold,
+      crosswalk,
     };
 
-    const {
-      integrated,
-      issues,
-      issuesSummary,
-      stats,
-      integrationMode,
-      strategyLabel,
-      resolutionStats,
-      bipartiteStats,
-      normStats,
-      governanceAudit,
-      synthesizedCatalog,
-    } = runPipeline(orderFiles, catalogFile, pipelineOptions);
-
-    setProcIdx(3);
-    await delay(350);
-
-    // Lọc đơn hủy & trả hàng cho doanh thu và báo cáo
-    const cleanRows = integrated.filter((r) => {
-      const st = (r.trang_thai || "").toLowerCase();
-      return !st.includes("hủy") && !st.includes("huy") && !st.includes("trả") && !st.includes("tra");
-    });
-
-    const revenueTotal =
-      governanceAudit?.cleanRevenueTotal ?? cleanRows.reduce((s, r) => s + r.thanh_tien, 0);
-
-    const channelMap = new Map();
-    cleanRows.forEach((r) =>
-      channelMap.set(r.kenh, (channelMap.get(r.kenh) || 0) + r.thanh_tien)
-    );
-    const revenueByChannel = [...channelMap.entries()]
-      .map(([kenh, doanhThu]) => ({ kenh, doanhThu }))
-      .sort((a, b) => b.doanhThu - a.doanhThu);
-
-    const productMap = new Map();
-    cleanRows.forEach((r) => {
-      const key = r.ten_sp || "(Không rõ)";
-      productMap.set(key, (productMap.get(key) || 0) + r.so_luong);
-    });
-    const topProducts = [...productMap.entries()]
-      .map(([ten, soLuong]) => ({ ten, soLuong }))
-      .sort((a, b) => b.soLuong - a.soLuong)
-      .slice(0, 8);
-
-    const pendingConfirmations = integrated.filter(
-      (r) => r.matchStatus === "NEEDS_CONFIRMATION" || r.matchStatus === "UNRESOLVED"
-    );
-
-    setResult({
-      integrated,
-      issues,
-      issuesSummary,
-      stats,
-      revenueTotal,
-      revenueByChannel,
-      topProducts,
-      pendingConfirmations,
-      integrationMode,
-      strategyLabel,
-      resolutionStats,
-      bipartiteStats,
-      normStats,
-      governanceAudit,
-      synthesizedCatalog,
-      activePreset:
-        activePresetId !== "custom" ? PRESETS[activePresetId].name : "Tùy chỉnh riêng",
-      fileBreakdown: orderFiles.map((f) => `${f.fileName} (${f.dataRows.length})`).join(" · "),
-    });
+    try {
+      const pipelineResult = runPipeline(orderFiles, catalogFile, pipelineOptions);
+      setManualConfirmations(new Map());
+      setResult({
+        ...pipelineResult,
+        activePreset: activePresetId !== "custom" ? PRESETS[activePresetId].name : "Tùy chỉnh riêng",
+        fileBreakdown: orderFiles.map(f => `${f.fileName} (${f.dataRows.length})`).join(" · "),
+      });
+    } catch (error) {
+      setParseError(error.message || "Không thể xử lý dữ liệu.");
+      setStep("upload");
+      return;
+    }
 
     setStep("results");
   };
 
   const handleManualDecision = (rowIndex, decision, item) => {
-    setManualConfirmations((prev) => {
-      const next = new Map(prev);
-      next.set(rowIndex, { decision, item });
-      return next;
-    });
-  };
-
-  const getExportData = () => {
-    if (!result) return { headers: [], rows: [] };
-    const headers = [
-      "Nguồn",
-      "Mã đơn",
-      "Ngày",
-      "Tên sản phẩm",
-      "Mã định danh (SKU)",
-      "Thương hiệu/NCC",
-      "Kênh",
-      "Trạng thái đơn",
-      "Số lượng",
-      "Giá bán",
-      "Thành tiền",
-      "Trạng thái khớp",
-      "Vấn đề chất lượng",
-    ];
-
-    const rows = result.integrated.map((r, i) => {
-      const rowId = r.rowIndex !== undefined ? r.rowIndex : i;
-      const manual = manualConfirmations.get(rowId);
-      let matchSt = r.matchStatus;
-      let prodName = r.ten_sp;
-      let idCode = r.ma_dinh_danh;
-
-      if (manual) {
-        if (manual.decision === "ACCEPT") {
-          matchSt = "MATCHED_CONFIRMED_USER";
-          if (r.matched) {
-            prodName = r.matched.ten_sp;
-            idCode = r.matched.ma_dinh_danh;
-          }
-        } else if (manual.decision === "REJECT") {
-          matchSt = "REJECTED_USER";
-          idCode = "—";
-        }
-      }
-
-      const activeIssues = r.issues.filter((iss) => {
-        if (
-          manual?.decision === "ACCEPT" &&
-          iss.group === "entity" &&
-          iss.severity === "NEEDS_CONFIRMATION"
-        ) {
-          return false;
-        }
-        return true;
-      });
-
-      return [
-        r.nguon,
-        r.ma_don,
-        r.ngay,
-        prodName,
-        idCode,
-        r.thuong_hieu,
-        r.kenh,
-        r.trang_thai,
-        r.so_luong,
-        r.gia,
-        r.thanh_tien,
-        matchSt,
-        activeIssues.length
-          ? activeIssues
-              .map(
-                (iss) =>
-                  `[${GROUP_LABELS[iss.group] || iss.group} | ${
-                    SEVERITY_LABELS[iss.severity]
-                  }] ${iss.detail}`
-              )
-              .join(" | ")
-          : "Không có",
-      ];
-    });
-
-    return { headers, rows };
+    const next = new Map(manualConfirmations);
+    next.set(rowIndex, { decision, item });
+    setManualConfirmations(next);
+    setResult(prev => applyManualDecisions(prev, next));
   };
 
   const exportSummaryCsv = () => {
     if (!result) return;
-    const { headers, rows } = getExportData();
+    const { headers, rows } = getExportData(result);
     const csvContent = [headers, ...rows]
       .map((row) =>
-        row.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")
+        row.map(csvCell).join(",")
       )
       .join("\r\n");
 
@@ -346,7 +218,7 @@ export default function App() {
 
   const exportSummaryExcel = () => {
     if (!result) return;
-    const { headers, rows } = getExportData();
+    const { headers, rows } = getExportData(result);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     const colWidths = headers.map((h, i) => {
       const maxLen = Math.max(
@@ -367,7 +239,7 @@ export default function App() {
     (m) => m.decision === "ACCEPT"
   ).length;
   const liveMatchedCount = result
-    ? (result.stats?.matchedCount || 0) + acceptedManualCount
+    ? (result.stats?.matchedCount || 0)
     : 0;
   const liveMatchRate = result
     ? result.stats?.totalRows
@@ -375,12 +247,8 @@ export default function App() {
       : 0
     : 0;
 
-  const unreviewedConfirmationsCount = result
-    ? result.pendingConfirmations.filter(
-        (item, idx) =>
-          !manualConfirmations.has(item.rowIndex !== undefined ? item.rowIndex : idx)
-      ).length
-    : 0;
+  const reviewCounts = reconciliationCounts(result?.pendingConfirmations || [], manualConfirmations);
+  const unreviewedConfirmationsCount = reviewCounts.pending;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -461,6 +329,23 @@ export default function App() {
             </div>
 
             {/* Action Button & Status Help */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 text-xs space-y-2">
+              <label className="block font-semibold">Crosswalk mã sách (tùy chọn, dùng với Catalog hoặc Master Source)
+                <input type="file" accept=".csv,.xlsx,.xls" className="block mt-2" onChange={async e => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  try {
+                    const parsed = await parseToFileState(f);
+                    setCrosswalk(parseCrosswalk(parsed.headers, parsed.dataRows));
+                    setParseError('');
+                  } catch (error) { setParseError(error.message); }
+                }} />
+              </label>
+              <p>Cột internal_code và standard_code; thêm source (tên tệp đơn hàng) nếu mã nội bộ khác nhau giữa các nguồn. Trong mỗi nguồn, một mã chỉ được trỏ đến một mã chuẩn đã có trong danh mục.</p>
+              {crosswalk.length > 0 && <p>Đã nạp {crosswalk.length} ánh xạ. <button type="button" onClick={() => setCrosswalk([])} className="text-rose-700 underline">Xóa Crosswalk</button></p>}
+              <p>Bảng ngang theo chi nhánh được giữ để đối soát, không tính doanh thu khi chưa xác định nghiệp vụ. Giá bìa không thay thế giá bán.</p>
+            </div>
             <div className="pt-4 flex flex-col items-center gap-2.5">
               <button
                 type="button"
@@ -560,13 +445,7 @@ export default function App() {
                 },
                 {
                   key: "hitl",
-                  label: `Đối Soát Thực Thể HITL (${
-                    unreviewedConfirmationsCount > 0
-                      ? unreviewedConfirmationsCount
-                      : result.pendingConfirmations.length > 0
-                      ? "✓ Đã duyệt"
-                      : "0"
-                  })`,
+                  label: `HITL (${reviewCounts.pending} cần duyệt · ${reviewCounts.unlinked} chưa liên kết)`,
                   icon: Sparkles,
                   badge: unreviewedConfirmationsCount > 0 ? "attention" : null,
                 },
@@ -624,14 +503,14 @@ export default function App() {
                   pendingConfirmations={result.pendingConfirmations}
                   manualConfirmations={manualConfirmations}
                   onManualDecision={handleManualDecision}
-                  config={config}
+                  config={result.runConfig}
                 />
               )}
 
               {activeTab === "scientific_report" && (
                 <ScientificReportTab
                   result={result}
-                  config={config}
+                  config={result.runConfig}
                   liveMatchRate={liveMatchRate}
                 />
               )}

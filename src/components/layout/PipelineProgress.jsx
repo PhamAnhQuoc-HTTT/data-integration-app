@@ -4,7 +4,7 @@ import { CheckCircle2, Loader2, ArrowRight } from "lucide-react";
 export function PipelineProgress({ procIdx }) {
   const steps = [
     {
-      title: "Tiền xử lý & Chuẩn hóa 8 nhóm",
+      title: "Tiền xử lý & Chuẩn hóa 7 nhóm",
       sub: "Schema mapping, Unpivot đa chi nhánh, chuẩn hóa định dạng số/ngày/kênh (RQ1)",
       code: "RQ1",
     },

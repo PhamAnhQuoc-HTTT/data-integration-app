@@ -83,8 +83,9 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
 
         <div className="p-3.5 bg-slate-50/80 rounded-lg border border-slate-200 text-xs text-slate-700 leading-relaxed">
           <strong className="text-slate-900">Quy chuẩn học thuật:</strong> Pipeline xử lý theo 7 nhóm chuẩn hóa cốt lõi:
-          (1) Mã SKU/Barcode định dạng chuẩn, (2) Chuẩn hóa Unicode NFC & loại bỏ khoảng trắng dư, (3) Định dạng số học tiền tệ loại bỏ ký hiệu tiền và phân tách hàng nghìn, (4) Đồng bộ ngày tháng đa chuẩn về ISO 8601 (hỗ trợ cả Excel serial date), (5) Ánh xạ danh mục kênh & trạng thái về tập từ vựng chuẩn, (6) Unpivot đa chi nhánh về dạng bảng quan hệ phẳng, (7) Mã hóa UTF-8 an toàn.
+          (1) Mã SKU/Barcode định dạng chuẩn, (2) Chuẩn hóa Unicode NFC & loại bỏ khoảng trắng dư, (3) Định dạng số học tiền tệ loại bỏ ký hiệu tiền và phân tách hàng nghìn, (4) Đồng bộ ngày tháng đa chuẩn về ISO 8601 (hỗ trợ cả Excel serial date), (5) Ánh xạ danh mục kênh & trạng thái về tập từ vựng chuẩn, (6) Unpivot đa chi nhánh về dạng bảng quan hệ phẳng, (7) Xuất UTF-8 và phát hiện dấu hiệu lỗi encoding; không tự suy đoán sửa nội dung.
         </div>
+        <p className="text-xs text-slate-500 mt-2">Số giá trị số được chuẩn hóa: {norm.numberCount || 0}; dòng unpivot: {norm.structureCount || 0}. Đây là thống kê thao tác, không phải độ chính xác so với Ground Truth.</p>
       </div>
 
       {/* ==================== PHẦN 2: RQ2 ==================== */}
@@ -105,6 +106,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
           </div>
           <AcademicBadge code="RQ2" label="Multi-tier vs Exact" />
         </div>
+        <p className="text-xs text-slate-500 mb-3">Tỷ lệ liên kết tự động trước duyệt; không tính ứng viên đang chờ. Precision, recall và F1 cần tập dữ liệu có Ground Truth. Kết quả duyệt tay được phản ánh ở KPI và bảng dữ liệu.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           {/* Card 1: Exact Only */}
@@ -123,10 +125,10 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
           {/* Card 2: Multi-tier Engine */}
           <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 text-center">
             <span className="text-[11px] uppercase font-bold text-indigo-800 block mb-1">
-              Multi-tier Matching Đề Xuất
+              Multi-tier tự động trước duyệt
             </span>
             <div className="text-3xl font-black font-mono text-indigo-700 mt-2">
-              {res ? `${res.multiTierTotalLinkedRate}%` : `${liveMatchRate}%`}
+              {res ? `${res.multiTierMatchRate}%` : `${liveMatchRate}%`}
             </div>
             <span className="text-[11px] text-indigo-600 mt-1 block font-medium">
               {res ? "Tầng 1 (Mã) + Tầng 2 (Crosswalk) + Tầng 3 (Fuzzy)" : (result.strategyLabel || "Tự động phân giải thực thể")}
@@ -139,7 +141,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
               Mức Độ Cải Thiện (Delta)
             </span>
             <div className="text-3xl font-black font-mono text-emerald-600 mt-2">
-              {res ? `+${res.improvementRate}%` : (liveMatchRate > 0 ? `+${liveMatchRate}%` : "—")}
+              {res ? `${res.improvementRate} điểm %` : "Chưa có baseline"}
             </div>
             <span className="text-[11px] text-emerald-700 mt-1 block font-medium">
               Nhận diện biến thể tên, thiếu dấu, sai mã SKU
@@ -199,7 +201,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 text-center">
             <span className="text-[11px] uppercase font-bold text-slate-500 block mb-1">
-              Doanh Thu Thô Ban Đầu
+              Giá trị giao dịch tính được
             </span>
             <div className="text-xl font-black font-mono text-slate-700 mt-2">
               {formatVND(gov.rawRevenueTotal || result.revenueTotal)}
@@ -209,25 +211,25 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
 
           <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 text-center">
             <span className="text-[11px] uppercase font-bold text-emerald-800 block mb-1">
-              Doanh Thu Thực Tế (Sạch)
+              Giá trị bán đủ điều kiện
             </span>
             <div className="text-xl font-black font-mono text-emerald-700 mt-2">
               {formatVND(gov.cleanRevenueTotal || result.revenueTotal)}
             </div>
             <span className="text-[11px] text-emerald-600 mt-1 block font-medium">
-              Đã loại bỏ sai lệch và đơn hủy
+              Chỉ dòng hoàn thành, giá và số lượng hợp lệ
             </span>
           </div>
 
           <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/40 text-center">
             <span className="text-[11px] uppercase font-bold text-rose-800 block mb-1">
-              Doanh Thu Ảo Loại Trừ
+              Giá trị chưa đưa vào báo cáo
             </span>
             <div className="text-xl font-black font-mono text-rose-600 mt-2">
               {formatVND(gov.revenueDiscrepancyPrevented || 0)}
             </div>
             <span className="text-[11px] text-rose-600 mt-1 block font-medium">
-              Tránh sai lệch trong báo cáo tài chính
+              Gồm hủy/hoàn và trạng thái chưa xác nhận
             </span>
           </div>
         </div>
@@ -236,22 +238,23 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
           <div className="flex items-start gap-2">
             <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
             <div>
-              <strong>Hợp nhất phân mảnh tên sản phẩm:</strong> Từ{" "}
+              <strong>Thống kê định danh:</strong> Có{" "}
               <span className="font-mono font-bold text-slate-900">{gov.rawUniqueTitlesCount || 0}</span> biến thể
-              tên thô rải rác giữa các sàn TMĐT được quy tụ về{" "}
+              tên thô; kết quả hiện có{" "}
               <span className="font-mono font-bold text-emerald-700">{gov.cleanUniqueProductsCount || 0}</span> thực thể
-              chuẩn duy nhất.
+              (bao gồm các bản ghi chưa liên kết, giữ riêng theo nguồn). Chưa phải phép đo độ chính xác thực thể.
             </div>
           </div>
           <div className="flex items-start gap-2">
             <CheckCircle2 size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" />
             <div>
-              <strong>Ngăn chặn ghi nhận doanh thu ảo:</strong> Hệ thống gắn cờ và trừ bỏ{" "}
+              <strong>Loại theo trạng thái:</strong> Hệ thống không cộng{" "}
               <span className="font-mono font-bold text-rose-700">{formatVND(gov.cancelledRevenuePrevented || 0)}</span> từ
-              các đơn hàng có trạng thái Đã hủy hoặc Trả hàng, đảm bảo tính chuẩn xác cho báo cáo quản trị.
+              các dòng có trạng thái Đã hủy hoặc Trả hàng vào giá trị bán đủ điều kiện.
             </div>
           </div>
         </div>
+        <p className="text-xs text-slate-600 mt-3">Giá trị chờ xác định trạng thái: {formatVND(gov.unconfirmedRevenue || 0)}. Phần nghi trùng: {formatVND(gov.duplicateRevenueDiscrepancy || 0)} (chưa tự trừ). Có {gov.excludedRowsCount || 0} dòng không được cộng vào báo cáo. Các con số này chưa chứng minh mức giảm sai lệch so với Ground Truth.</p>
       </div>
     </div>
   );

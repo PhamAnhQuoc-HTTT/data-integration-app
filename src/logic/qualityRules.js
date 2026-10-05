@@ -38,7 +38,7 @@ export const SEVERITY_LABELS = {
 export function checkMissingAttributes(rows) {
   const issues = [];
   const fieldsToCheck = ['ngay', 'kenh', 'thuong_hieu', 'ma_dinh_danh', 'trang_thai'];
-  const sourceStats = {};
+  const sourceStats = Object.create(null);
   
   rows.forEach((row, i) => {
     const source = row.__source || 'unknown';
@@ -71,7 +71,7 @@ export function checkStructuralConflict(rows) {
   const timeRegex = /\d{2}:\d{2}/;
   rows.forEach((row, i) => {
     const rawDate = row.__raw_ngay || row.ngay;
-    if (rawDate && timeRegex.test(String(rawDate))) {
+    if (rawDate && isValidDate(row.ngay) && timeRegex.test(String(rawDate))) {
       issues.push({ rowIndex: i, group: "schema", severity: "AUTO_FIXED", detail: "Đã tách phần giờ khỏi trường ngày" });
     }
   });
@@ -90,8 +90,8 @@ export function checkMatchStatus(rows) {
         rowIndex: i, group: "entity", severity: "NEEDS_CONFIRMATION",
         detail: `Khớp mờ với "${row.matched?.ten_sp}" (điểm ${row.matchScore}/100) — cần xác nhận`,
       });
-    } else if (row.matchStatus === "UNRESOLVED") {
-      issues.push({ rowIndex: i, group: "entity", severity: "FLAGGED_ONLY", detail: "Không tìm thấy sản phẩm khớp trong danh mục chuẩn" });
+    } else if (row.matchStatus === "UNRESOLVED" && row.__hasReferenceCatalog) {
+      issues.push({ rowIndex: i, group: "entity", severity: "FLAGGED_ONLY", detail: "Chưa xác lập liên kết với danh mục đối chiếu; giữ nguyên dữ liệu nguồn" });
     }
   });
   return issues;
@@ -99,8 +99,8 @@ export function checkMatchStatus(rows) {
 
 export function checkManyToOne(rows) {
   const issues = [];
-  const productCodes = {}; 
-  const sampleIndices = {};
+  const productCodes = Object.create(null);
+  const sampleIndices = Object.create(null);
 
   rows.forEach((row, i) => {
     if (row.ten_sp && row.ma_dinh_danh) {
@@ -130,8 +130,8 @@ export function checkMissing(rows) {
   const issues = [];
   rows.forEach((row, i) => {
     const missing = [];
-    if (!row.so_luong) missing.push("số lượng");
-    if (!row.gia) missing.push("giá bán");
+    if (row.so_luong === '' || row.so_luong == null) missing.push("số lượng");
+    if (row.gia === '' || row.gia == null) missing.push("giá bán");
     if (!row.ten_sp && !row.ma_dinh_danh) missing.push("tên/mã sản phẩm");
     if (missing.length) {
       issues.push({ rowIndex: i, group: "value", severity: "FLAGGED_ONLY", detail: `Thiếu: ${missing.join(", ")}` });
@@ -145,10 +145,10 @@ export function checkMalformed(rows) {
   rows.forEach((row, i) => {
     const qty = normalizeNumber(row.so_luong);
     const price = normalizeNumber(row.gia);
-    if (row.so_luong && (qty === null || qty <= 0)) {
+    if (row.so_luong && (qty === null || qty <= 0 || !Number.isInteger(qty))) {
       issues.push({ rowIndex: i, group: "value", severity: "FLAGGED_ONLY", detail: `Số lượng không hợp lệ: "${row.so_luong}"` });
     }
-    if (row.gia && (price === null || price <= 0)) {
+    if (row.gia && (price === null || price < 0)) {
       issues.push({ rowIndex: i, group: "value", severity: "FLAGGED_ONLY", detail: `Giá bán không hợp lệ: "${row.gia}"` });
     }
     if (row.ngay && !isValidDate(row.ngay)) {
@@ -162,7 +162,7 @@ export function checkPriceAnomaly(rows, options = {}) {
   const threshold = options.priceDeviationThreshold !== undefined ? options.priceDeviationThreshold : PRICE_DEVIATION_THRESHOLD;
   const issues = [];
   rows.forEach((row, i) => {
-    if (!row.matched) return;
+    if (!row.matched || (row.matchStatus && !['MATCHED_EXACT', 'MATCHED_FUZZY_HIGH', 'MATCHED_CONFIRMED_USER'].includes(row.matchStatus))) return;
     const listPrice = normalizeNumber(row.matched.gia_chuan);
     const price = normalizeNumber(row.gia);
     if (listPrice && price !== null) {
@@ -181,10 +181,10 @@ export function checkPriceAnomaly(rows, options = {}) {
 export function checkCrossChannelPrice(rows, options = {}) {
   const threshold = options.priceDeviationThreshold !== undefined ? options.priceDeviationThreshold : PRICE_DEVIATION_THRESHOLD;
   const issues = [];
-  const productPrices = {}; 
+  const productPrices = Object.create(null);
 
   rows.forEach((row, i) => {
-    const ma = row.ma_dinh_danh;
+    const ma = ['MATCHED_EXACT', 'MATCHED_FUZZY_HIGH', 'MATCHED_CONFIRMED_USER'].includes(row.matchStatus) ? row.matched?.ma_dinh_danh || row.ma_dinh_danh : row.ma_dinh_danh;
     const kenh = normalizeChannel(row.kenh);
     const price = normalizeNumber(row.gia);
     
@@ -242,7 +242,7 @@ export function checkNullVsZero(rows) {
 
 export function checkTimingMismatch(rows) {
   const issues = [];
-  const orderDates = {};
+  const orderDates = Object.create(null);
 
   rows.forEach((row, i) => {
     if (row.ma_don && row.ngay && isValidDate(row.ngay)) {
@@ -353,7 +353,7 @@ export function checkDuplicates(rows) {
   const seen = new Map(); 
   rows.forEach((row, i) => {
     if (!row.ma_don) return;
-    const key = `${row.__source || ""}|${row.ma_don}`;
+    const key = JSON.stringify([row.__source, row.ma_don, row.ma_dinh_danh || row.ten_sp, row.ngay, normalizeNumber(row.so_luong), normalizeNumber(row.gia), row.kenh, row.trang_thai]);
     if (seen.has(key)) {
       issues.push({ rowIndex: i, group: "technical", severity: "NEEDS_CONFIRMATION", detail: `Trùng mã đơn "${row.ma_don}" với dòng #${seen.get(key) + 1}` });
     } else {
@@ -366,7 +366,7 @@ export function checkDuplicates(rows) {
 export function checkReferentialIntegrity(rows) {
   const issues = [];
   rows.forEach((row, i) => {
-    if (row.ma_dinh_danh && row.matchStatus === "UNRESOLVED") {
+    if (row.__hasReferenceCatalog !== false && row.ma_dinh_danh && row.matchStatus === "UNRESOLVED" && !row.matched) {
       issues.push({ rowIndex: i, group: "technical", severity: "FLAGGED_ONLY", detail: `Mã ${row.ma_dinh_danh} không tồn tại trong danh mục sản phẩm chuẩn` });
     }
   });

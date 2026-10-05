@@ -26,10 +26,10 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
               <TrendingUp size={15} />
             </div>
             <h3 className="text-sm font-bold text-slate-900">
-              Phân Bổ Doanh Thu Thực Tế Theo Kênh
+              Giá trị bán đủ điều kiện theo kênh
             </h3>
           </div>
-          <span className="text-[11px] font-mono text-slate-400">Đã lọc đơn hủy</span>
+          <span className="text-[11px] font-mono text-slate-400">Theo điều kiện ghi nhận</span>
         </div>
 
         <ResponsiveContainer width="100%" height={280}>
@@ -57,7 +57,7 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
               }}
             />
             <Legend
-              formatter={() => "Doanh thu sạch (VNĐ)"}
+              formatter={() => "Giá trị đủ điều kiện (VNĐ)"}
               iconType="circle"
               wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
             />

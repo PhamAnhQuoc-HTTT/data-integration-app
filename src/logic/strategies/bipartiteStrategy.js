@@ -1,8 +1,9 @@
 /**
- * Chiến Lược 3: Ghép cặp tối ưu toàn cục (Bipartite Optimal Matching Strategy)
+ * Chiến Lược 3: Ghép cặp tham lam theo điểm (Greedy Bipartite Matching Strategy)
  * Giải quyết triệt để lỗi tranh chấp khớp giữa các nguồn đơn hàng và tự động tổng hợp Master Catalog.
  */
 import { normalizeTextForMatching } from "../normalize";
+import { bookEntityKey } from '../bookMatching';
 import {
   extractUniqueEntitiesFromRows,
   matchBipartiteEntities,
@@ -38,8 +39,8 @@ export function executeBipartiteStrategy({ allRows, sourceRowsMap, fuzzyHighThre
       const entitiesK = extractUniqueEntitiesFromRows(rowsK, nextSourceLabel);
 
       // Chuyển đổi catalog hiện tại thành danh sách entities để so khớp
-      const catalogEntities = catalog.map((c, cIdx) => ({
-        entityKey: c.ma_dinh_danh ? `ID:${c.ma_dinh_danh}` : `TITLE:${normalizeTextForMatching(c.ten_sp)}`,
+      const catalogEntities = catalog.filter(c => c.matchStatus !== 'NEEDS_CONFIRMATION').map((c, cIdx) => ({
+        entityKey: `CATALOG:${catalog.indexOf(c)}`,
         source: "CANONICAL_CATALOG",
         ma_dinh_danh: c.ma_dinh_danh,
         ten_sp: c.ten_sp,
@@ -64,7 +65,7 @@ export function executeBipartiteStrategy({ allRows, sourceRowsMap, fuzzyHighThre
         if (!canonical.sources.includes(nextSourceLabel)) {
           canonical.sources.push(nextSourceLabel);
         }
-        if (itemK.ten_sp && itemK.ten_sp.length > canonical.ten_sp.length) {
+        if (pair.status !== 'NEEDS_CONFIRMATION' && itemK.ten_sp && itemK.ten_sp.length > canonical.ten_sp.length) {
           canonical.ten_sp = itemK.ten_sp;
         }
 
@@ -73,6 +74,15 @@ export function executeBipartiteStrategy({ allRows, sourceRowsMap, fuzzyHighThre
           matchStatus: pair.status,
           matchScore: pair.score,
         });
+        // An exclusive product becomes linked once a later source supplies evidence.
+        if (pair.status !== 'NEEDS_CONFIRMATION') {
+          for (const mapping of entityToCanonicalMap.values()) {
+            if (mapping.canonical === canonical && mapping.matchStatus === 'UNRESOLVED') {
+              mapping.matchStatus = pair.status;
+              mapping.matchScore = pair.score;
+            }
+          }
+        }
       });
 
       // 2. Thêm các sản phẩm đặc thù chỉ có ở nguồn mới
@@ -100,9 +110,7 @@ export function executeBipartiteStrategy({ allRows, sourceRowsMap, fuzzyHighThre
   }
 
   const resolved = allRows.map((row) => {
-    const rawId = (row.ma_dinh_danh || "").replace(/[\s-]/g, "").toUpperCase();
-    const normTitle = normalizeTextForMatching(row.ten_sp);
-    const entityKey = rawId ? `ID:${rawId}` : `TITLE:${normTitle}`;
+    const entityKey = bookEntityKey(row);
     const mappingKey = `${row.__source}|${entityKey}`;
 
     const mapping = entityToCanonicalMap.get(mappingKey);
@@ -128,8 +136,8 @@ export function executeBipartiteStrategy({ allRows, sourceRowsMap, fuzzyHighThre
   return {
     strategyKey: "BIPARTITE",
     strategyLabel: sourceLabels.length > 2
-      ? `Cơ chế 3: Ghép cặp tối ưu toàn cục (${sourceLabels.length} nguồn)`
-      : "Cơ chế 3: Ghép cặp tối ưu toàn cục (Bipartite Matching)",
+      ? `Cơ chế 3: Ghép cặp tham lam theo điểm (${sourceLabels.length} nguồn)`
+      : "Cơ chế 3: Ghép cặp tham lam theo điểm (Bipartite Matching)",
     resolved,
     catalog,
     bipartiteStats: {

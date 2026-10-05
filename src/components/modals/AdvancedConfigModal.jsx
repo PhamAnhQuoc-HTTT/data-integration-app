@@ -167,7 +167,7 @@ export function AdvancedConfigModal({
                       {
                         id: "BIPARTITE",
                         name: "Bipartite Graph",
-                        desc: "Ghép cặp tối ưu toàn cục (Khuyên dùng)",
+                        desc: "Ghép cặp tham lam theo điểm (1–1)",
                       },
                       {
                         id: "CLUSTERING",

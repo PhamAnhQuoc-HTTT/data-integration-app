@@ -14,7 +14,7 @@ export function removeDiacritics(str) {
 /** Trim + gộp khoảng trắng thừa, GIỮ NGUYÊN dấu tiếng Việt (dùng để hiển thị). */
 export function normalizeText(value) {
   if (value === null || value === undefined) return null;
-  const text = String(value).trim().replace(/\s+/g, " ");
+  const text = String(value).normalize("NFC").trim().replace(/\s+/g, " ");
   return text === "" ? null : text;
 }
 
@@ -42,29 +42,37 @@ export function normalizeIdCode(value) {
  */
 export function normalizeNumber(value) {
   if (value === null || value === undefined) return null;
-  if (typeof value === "number") return isNaN(value) ? null : value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   let text = String(value).trim();
   if (text === "") return null;
-  text = text.replace(/[^\d.,-]/g, "");
+  text = text.replace(/(?:vnd|vnđ|đ|₫|\$)/gi, "").trim();
+  if (!/^-?\d+(?:[.,]\d+)*$/.test(text)) return null;
   if (text === "") return null;
 
   const lastComma = text.lastIndexOf(",");
   const lastDot = text.lastIndexOf(".");
   if (lastComma !== -1 && lastDot !== -1) {
+    if (!/^-?(?:\d{1,3}(?:\.\d{3})+|\d+),\d+$/.test(text) && !/^-?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d+$/.test(text)) return null;
     if (lastComma > lastDot) {
       text = text.replace(/\./g, "").replace(",", ".");
     } else {
       text = text.replace(/,/g, "");
     }
   } else if (lastComma !== -1) {
+    if ((text.match(/,/g) || []).length > 1 && !/^-?\d{1,3}(,\d{3})+$/.test(text)) return null;
     const decimals = text.length - lastComma - 1;
     text = decimals === 3 ? text.replace(/,/g, "") : text.replace(",", ".");
   } else if (lastDot !== -1) {
+    if ((text.match(/\./g) || []).length > 1 && !/^-?\d{1,3}(\.\d{3})+$/.test(text)) return null;
     const decimals = text.length - lastDot - 1;
     if (decimals === 3) text = text.replace(/\./g, "");
   }
-  const n = parseFloat(text);
-  return isNaN(n) ? null : n;
+  const n = Number(text);
+  return Number.isFinite(n) ? n : null;
+}
+
+function validCalendarDate(y, m, d) {
+  return y >= 1000 && m >= 1 && m <= 12 && d >= 1 && d <= new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
 const DATE_PATTERNS = [
@@ -106,14 +114,14 @@ export function normalizeDate(value) {
     const d = parseInt(vnMatch[1], 10);
     const m = parseInt(vnMatch[2], 10);
     const y = parseInt(vnMatch[3], 10);
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+    if (validCalendarDate(y, m, d)) {
       return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     }
     return null;
   }
 
   // 2. Bỏ phần giờ nếu có ở đuôi (VD: "29-07-2025 11:41:00" -> "29-07-2025")
-  const cleanDateText = text.replace(/\s+\d{1,2}:\d{2}(?::\d{2})?.*$/, "").trim();
+  const cleanDateText = text.replace(/[T\s]+\d{1,2}:\d{2}(?::\d{2})?.*$/, "").trim();
 
   for (const { re, order } of DATE_PATTERNS) {
     const m = cleanDateText.match(re);
@@ -121,15 +129,11 @@ export function normalizeDate(value) {
       const parts = {};
       order.forEach((key, i) => { parts[key] = parseInt(m[i + 1], 10); });
       const { y, m: mo, d } = parts;
-      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      if (validCalendarDate(y, mo, d)) {
         return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       }
       return null;
     }
-  }
-  const parsed = new Date(text);
-  if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
   }
   return null;
 }
@@ -214,7 +218,7 @@ export function normalizeChannel(value) {
     'tai cua hang': 'POS'
   };
   
-  return map[matchStr] || original;
+  return Object.hasOwn(map, matchStr) ? map[matchStr] : original;
 }
 
 /**
@@ -250,10 +254,12 @@ export function normalizeOrderStatus(value) {
     'tra hang': 'Trả hàng',
     'returned': 'Trả hàng',
     'hoan tra': 'Trả hàng',
-    'refund': 'Trả hàng'
+    'refund': 'Trả hàng',
+    'hoan tien': 'Trả hàng',
+    'refunded': 'Trả hàng'
   };
   
-  return map[matchStr] || original;
+  return Object.hasOwn(map, matchStr) ? map[matchStr] : original;
 }
 
 /**

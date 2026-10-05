@@ -129,7 +129,8 @@ describe("field mapping", () => {
     const headers = ["Tên sách", "Tác giả", "Giá bán", "Số lượng"];
     const mapping = detectFields(headers);
     expect(mapping.ten_sp).toBe(0);
-    expect(mapping.thuong_hieu).toBe(1);
+    expect(mapping.tac_gia).toBe(1);
+    expect(mapping.thuong_hieu).toBe(-1);
     expect(mapping.gia).toBe(2);
     expect(mapping.so_luong).toBe(3);
   });
@@ -257,7 +258,7 @@ describe("Strategy Pattern & Resolution Rules (Cơ chế 1, 2, 3)", () => {
     const res = executeBipartiteStrategy({ allRows: all3Rows, sourceRowsMap });
     expect(res.resolved.length).toBe(4);
     const lazadaRowA = res.resolved.find(r => r.__source === "Lazada" && r.ma_dinh_danh === "9780001");
-    expect(lazadaRowA.matchStatus).toBe("MATCHED_EXACT");
+    expect(lazadaRowA.matchStatus).toBe("MATCHED_FUZZY_HIGH");
     expect(lazadaRowA.matched.ten_sp).toBe("Sách A");
     const lazadaRowB = res.resolved.find(r => r.__source === "Lazada" && r.ma_dinh_danh === "9780002");
     expect(lazadaRowB.matchStatus).toBe("UNRESOLVED");

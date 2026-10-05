@@ -14,6 +14,10 @@
  * Đánh giá mức độ cải thiện của Phương pháp đối chiếu nhiều tầng so với Exact Matching đơn thuần.
  */
 import { normalizeTextForMatching } from "./normalize";
+import { bookConflict } from './bookMatching';
+import { isSharedBookId } from './bookMatching';
+import { validateCatalog } from './catalogValidation';
+import { validateCrosswalk, sourceKey } from './crosswalk';
 
 export const FUZZY_HIGH_THRESHOLD = 90;
 export const FUZZY_CONFIRM_THRESHOLD = 70;
@@ -60,8 +64,10 @@ export function resolveEntities(
     crosswalk = [],
     fuzzyHighThreshold = FUZZY_HIGH_THRESHOLD,
     fuzzyConfirmThreshold = FUZZY_CONFIRM_THRESHOLD,
+    masterSource = null,
   } = {}
 ) {
+  catalog = validateCatalog(catalog);
   const catalogById = new Map();
   catalog.forEach((c) => {
     const key = c[idField] ? String(c[idField]).replace(/[\s-]/g, "").toUpperCase() : null;
@@ -69,10 +75,10 @@ export function resolveEntities(
   });
 
   const crosswalkById = new Map();
-  crosswalk.forEach((c) => {
+  validateCrosswalk(crosswalk, new Set(catalogById.keys())).forEach((c) => {
     if (c.internal_code) {
       const cleanKey = String(c.internal_code).replace(/[\s-]/g, "").toUpperCase();
-      crosswalkById.set(cleanKey, c.standard_code || c.isbn);
+      crosswalkById.set(JSON.stringify([sourceKey(c.source), cleanKey]), c.standard_code);
     }
   });
 
@@ -96,13 +102,15 @@ export function resolveEntities(
     let tier = null;
 
     // Baseline Exact Matching (Để đánh giá so sánh RQ2)
-    const canExactMatch = Boolean(idKey && catalogById.has(idKey));
+    const idHit = idKey && catalogById.get(idKey);
+    const canExactMatch = Boolean(idHit && !bookConflict(row, idHit) &&
+      (!masterSource || row.__source === masterSource || isSharedBookId(idKey)));
     if (canExactMatch) {
       exactOnlyMatchesCount++;
     }
 
     // Tầng 1: Khớp mã định danh chính xác (Exact Identifier)
-    if (idKey && catalogById.has(idKey)) {
+    if (canExactMatch) {
       matched = catalogById.get(idKey);
       status = "MATCHED_EXACT";
       score = 100;
@@ -111,9 +119,13 @@ export function resolveEntities(
     }
 
     // Tầng 2: Crosswalk mã nội bộ (nếu tầng 1 chưa khớp)
-    if (status === "UNRESOLVED" && idKey && crosswalkById.has(idKey)) {
-      const mappedStandardId = crosswalkById.get(idKey);
-      const hit = catalogById.get(String(mappedStandardId).toUpperCase());
+    const crosswalkKey = [row.__sourceName, row.__source, ''].map(source => JSON.stringify([sourceKey(source), idKey])).find(key => crosswalkById.has(key));
+    if (canExactMatch && crosswalkKey && crosswalkById.get(crosswalkKey) !== idKey) {
+      throw new Error(`Crosswalk mâu thuẫn với mã khớp trực tiếp ${idKey}. Hãy kiểm tra phạm vi mã nguồn và danh mục.`);
+    }
+    if (status === "UNRESOLVED" && idKey && crosswalkKey) {
+      const mappedStandardId = crosswalkById.get(crosswalkKey);
+      const hit = catalogById.get(String(mappedStandardId).replace(/[\s-]/g, '').toUpperCase());
       if (hit) {
         matched = hit;
         status = "MATCHED_EXACT";
@@ -129,18 +141,22 @@ export function resolveEntities(
       if (rowKey) {
         let best = null;
         let bestScore = 0;
+        let runnerUpScore = -Infinity;
         for (const c of catalogWithKeys) {
-          if (!c.__matchKey) continue;
+          if (!c.__matchKey || bookConflict(row, c)) continue;
           const s = tokenSortRatio(rowKey, c.__matchKey);
           if (s > bestScore) {
+            runnerUpScore = bestScore;
             bestScore = s;
             best = c;
+          } else if (s > runnerUpScore) {
+            runnerUpScore = s;
           }
         }
         if (best && bestScore >= fuzzyConfirmThreshold) {
           matched = best;
           score = bestScore;
-          if (bestScore >= fuzzyHighThreshold) {
+          if (bestScore >= fuzzyHighThreshold && bestScore - runnerUpScore > 5) {
             status = "MATCHED_FUZZY_HIGH";
             tier = "tier3_fuzzy_high";
             tier3HighCount++;
@@ -179,7 +195,7 @@ export function resolveEntities(
     multiTierMatchRate: totalRows > 0 ? Math.round((multiTierMatchesCount / totalRows) * 100) : 0,
     multiTierTotalLinked,
     multiTierTotalLinkedRate: totalRows > 0 ? Math.round((multiTierTotalLinked / totalRows) * 100) : 0,
-    improvementRate: totalRows > 0 ? Math.round(((multiTierTotalLinked - exactOnlyMatchesCount) / totalRows) * 100) : 0,
+    improvementRate: totalRows > 0 ? Math.round(((multiTierMatchesCount - exactOnlyMatchesCount) / totalRows) * 100) : 0,
     breakdown: {
       tier1_exact: tier1Count,
       tier2_crosswalk: tier2Count,
