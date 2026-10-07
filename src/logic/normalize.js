@@ -97,8 +97,8 @@ export function normalizeDate(value) {
   if (text === "") return null;
 
   // Hỗ trợ số serial ngày của Excel (ví dụ 45868)
-  if (/^\d{5}$/.test(text)) {
-    const serial = parseInt(text, 10);
+  if (/^\d{5}(?:\.\d+)?$/.test(text)) {
+    const serial = Math.floor(Number(text));
     const date = new Date((serial - 25569) * 86400 * 1000);
     if (!isNaN(date.getTime())) {
       const y = date.getUTCFullYear();
@@ -122,6 +122,11 @@ export function normalizeDate(value) {
 
   // 2. Bỏ phần giờ nếu có ở đuôi (VD: "29-07-2025 11:41:00" -> "29-07-2025")
   const cleanDateText = text.replace(/[T\s]+\d{1,2}:\d{2}(?::\d{2})?.*$/, "").trim();
+  // Unambiguous US slash dates; ambiguous dates retain the VN day-first convention.
+  const us = cleanDateText.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (us && Number(us[2]) > 12 && validCalendarDate(Number(us[3]), Number(us[1]), Number(us[2]))) {
+    return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
+  }
 
   for (const { re, order } of DATE_PATTERNS) {
     const m = cleanDateText.match(re);
@@ -140,6 +145,14 @@ export function normalizeDate(value) {
 
 export function isValidDate(value) {
   return normalizeDate(value) !== null;
+}
+
+export function normalizeTransactionStatus(status, returnStatus) {
+  const value = removeDiacritics(returnStatus || '').toLowerCase().trim();
+  if (/^(da hoan tien|refunded|refund completed|da tra hang|returned|hoan tien|tra hang)$/.test(value)) return 'Trả hàng';
+  if (/^(cancelled|canceled|da huy)$/.test(value)) return 'Đã hủy';
+  if (value && !/^(khong tra hang|no return|none|not requested)$/.test(value)) return 'Chờ đối soát trả hàng/hoàn tiền';
+  return normalizeOrderStatus(status);
 }
 
 // ----------------------------------------------------------------------

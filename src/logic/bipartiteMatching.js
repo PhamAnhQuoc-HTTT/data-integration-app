@@ -33,6 +33,7 @@ export function extractUniqueEntitiesFromRows(rows, sourceLabel) {
         source: sourceLabel,
         ma_dinh_danh: rawId || "",
         ten_sp: rawTitle,
+        phan_loai: r.phan_loai,
         ten_sp_norm: normTitle,
         thuong_hieu: r.thuong_hieu || "",
         prices: [],

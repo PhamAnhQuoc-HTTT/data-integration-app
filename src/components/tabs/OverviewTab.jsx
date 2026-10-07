@@ -48,7 +48,7 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
               tickFormatter={(v) => `${(v / 1000000).toFixed(1)}Tr`}
             />
             <Tooltip
-              formatter={(v) => [formatVND(v), "Doanh thu thực"]}
+              formatter={(v) => [formatVND(v), "Giá trị bán đủ điều kiện"]}
               contentStyle={{
                 fontSize: 12,
                 borderRadius: 8,

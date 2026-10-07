@@ -118,7 +118,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
               {res ? `${res.exactMatchRate}%` : "—"}
             </div>
             <span className="text-[11px] text-slate-400 mt-1 block">
-              {res ? `${res.exactOnlyMatchesCount}/${result.stats.totalRows} đơn được định danh` : "Không có catalog đối chiếu"}
+                {res ? `${res.exactOnlyMatchesCount}/${result.stats.totalRows} dòng được liên kết` : "Không có catalog đối chiếu"}
             </span>
           </div>
 
@@ -158,13 +158,13 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
               <span className="px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-indigo-100 text-indigo-800">
                 Tầng 1 (Exact ID):
               </span>
-              <span><strong>{res.breakdown.tier1_exact}</strong> đơn hàng khớp tuyệt đối theo mã SKU/Barcode gốc.</span>
+              <span><strong>{res.breakdown.tier1_exact}</strong> dòng khớp chính xác theo mã SKU/Barcode và điều kiện biến thể.</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-blue-100 text-blue-800">
                 Tầng 2 (Crosswalk):
               </span>
-              <span><strong>{res.breakdown.tier2_crosswalk}</strong> đơn hàng khớp qua bảng tra cứu mã tương đương nội bộ.</span>
+              <span><strong>{res.breakdown.tier2_crosswalk}</strong> dòng khớp qua bảng tra cứu mã tương đương nội bộ.</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-teal-100 text-teal-800">
@@ -206,7 +206,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
             <div className="text-xl font-black font-mono text-slate-700 mt-2">
               {formatVND(gov.rawRevenueTotal || result.revenueTotal)}
             </div>
-            <span className="text-[11px] text-slate-400 mt-1 block">Bao gồm cả đơn hủy & hoàn</span>
+            <span className="text-[11px] text-slate-400 mt-1 block">Bao gồm cả dòng hủy/hoàn và trạng thái chưa xác nhận</span>
           </div>
 
           <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 text-center">

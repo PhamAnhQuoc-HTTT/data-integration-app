@@ -14,7 +14,7 @@
  * Đánh giá mức độ cải thiện của Phương pháp đối chiếu nhiều tầng so với Exact Matching đơn thuần.
  */
 import { normalizeTextForMatching } from "./normalize";
-import { bookConflict } from './bookMatching';
+import { bookConflict, bookEntityKey, bookVariantKey } from './bookMatching';
 import { isSharedBookId } from './bookMatching';
 import { validateCatalog } from './catalogValidation';
 import { validateCrosswalk, sourceKey } from './crosswalk';
@@ -67,11 +67,14 @@ export function resolveEntities(
     masterSource = null,
   } = {}
 ) {
-  catalog = validateCatalog(catalog);
+  catalog = validateCatalog(catalog, { sourceVariants: masterSource !== null });
   const catalogById = new Map();
   catalog.forEach((c) => {
     const key = c[idField] ? String(c[idField]).replace(/[\s-]/g, "").toUpperCase() : null;
-    if (key) catalogById.set(key, c);
+    if (key) {
+      if (!catalogById.has(key)) catalogById.set(key, []);
+      catalogById.get(key).push(c);
+    }
   });
 
   const crosswalkById = new Map();
@@ -102,7 +105,18 @@ export function resolveEntities(
     let tier = null;
 
     // Baseline Exact Matching (Để đánh giá so sánh RQ2)
-    const idHit = idKey && catalogById.get(idKey);
+    const selectCandidates = candidates => {
+      const compatible = candidates.filter(c => !bookConflict(row, c));
+      if (masterSource && row.__source === masterSource) {
+        const own = compatible.filter(c => c.__sourceEntityKey === bookEntityKey(row));
+        if (own.length) return own;
+      }
+      const variant = bookVariantKey(row);
+      const specified = variant ? compatible.filter(c => bookVariantKey(c) === variant) : [];
+      return specified.length ? specified : compatible;
+    };
+    const idCandidates = selectCandidates(catalogById.get(idKey) || []);
+    const idHit = idCandidates.length === 1 ? idCandidates[0] : null;
     const canExactMatch = Boolean(idHit && !bookConflict(row, idHit) &&
       (!masterSource || row.__source === masterSource || isSharedBookId(idKey)));
     if (canExactMatch) {
@@ -111,7 +125,7 @@ export function resolveEntities(
 
     // Tầng 1: Khớp mã định danh chính xác (Exact Identifier)
     if (canExactMatch) {
-      matched = catalogById.get(idKey);
+      matched = idHit;
       status = "MATCHED_EXACT";
       score = 100;
       tier = "tier1_id_exact";
@@ -125,8 +139,13 @@ export function resolveEntities(
     }
     if (status === "UNRESOLVED" && idKey && crosswalkKey) {
       const mappedStandardId = crosswalkById.get(crosswalkKey);
-      const hit = catalogById.get(String(mappedStandardId).replace(/[\s-]/g, '').toUpperCase());
-      if (hit) {
+      // A crosswalk translates identifier namespaces; still check edition/binding.
+      const mappedRow = { ...row, ma_dinh_danh: mappedStandardId };
+      const hits = (catalogById.get(String(mappedStandardId).replace(/[\s-]/g, '').toUpperCase()) || []).filter(c => !bookConflict(mappedRow, c));
+      const variants = bookVariantKey(row) ? hits.filter(c => bookVariantKey(c) === bookVariantKey(row)) : [];
+      const candidates = variants.length ? variants : hits;
+      if (candidates.length === 1) {
+        const hit = candidates[0];
         matched = hit;
         status = "MATCHED_EXACT";
         score = 100;
@@ -142,7 +161,9 @@ export function resolveEntities(
         let best = null;
         let bestScore = 0;
         let runnerUpScore = -Infinity;
-        for (const c of catalogWithKeys) {
+        const fuzzyCandidates = masterSource && row.__source === masterSource
+          ? selectCandidates(catalogWithKeys) : catalogWithKeys;
+        for (const c of fuzzyCandidates) {
           if (!c.__matchKey || bookConflict(row, c)) continue;
           const s = tokenSortRatio(rowKey, c.__matchKey);
           if (s > bestScore) {

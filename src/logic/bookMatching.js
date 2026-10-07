@@ -5,9 +5,15 @@ export function bookTitleKey(value) {
   return removeDiacritics(value || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+export function bookVariantKey(row) {
+  const variant = bookTitleKey(row.phan_loai);
+  return /\b(combo|boxset|tron bo|bia cung|bia mem)\b/.test(variant) ? variant : '';
+}
+
 export function bookEntityKey(row) {
   const id = normalizeIdCode(row.ma_dinh_danh);
-  return id ? `ID:${id}` : `TITLE:${bookTitleKey(row.ten_sp)}`;
+  const identityVariant = bookVariantKey(row);
+  return id ? `ID:${id}${identityVariant ? ':VARIANT:' + identityVariant : ''}` : `TITLE:${bookTitleKey(row.ten_sp)}:${identityVariant}`;
 }
 
 export function isSharedBookId(value) {
@@ -22,7 +28,7 @@ export function canMatchIdentifier(a, b) {
 
 // Different editions/volumes must never be auto-linked solely by title similarity.
 export function bookConflict(a, b) {
-  const title = x => removeDiacritics(x.ten_sp || '').toLowerCase();
+  const title = x => removeDiacritics(`${x.ten_sp || ''} ${x.phan_loai || ''}`).toLowerCase();
   const x = title(a), y = title(b);
   const ids = [a, b].map(v => normalizeIdCode(v.ma_dinh_danh));
   if (ids.every(v => /^(978|979)\d{10}$/.test(v || '')) && ids[0] !== ids[1]) return true;

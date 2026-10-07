@@ -2,7 +2,7 @@
  * Field mapping: nhận diện & ánh xạ tên cột từ file gốc về schema chuẩn.
  * Áp dụng chung cho mọi ngành hàng và định dạng báo cáo (bao gồm cả báo cáo đa chi nhánh như FAHASA).
  */
-import { removeDiacritics } from "./normalize";
+import { removeDiacritics, normalizeNumber, normalizeText } from "./normalize";
 
 export const FIELD_PATTERNS = {
   ma_don: ["ma don hang", "ma don", "ma hoa don", "order id", "order", "ma dh", "so don", "ma giao dich", "invoice id", "invoice"],
@@ -26,6 +26,7 @@ export const FIELD_LABELS = {
   so_luong: "Số lượng", gia: "Giá bán", ma_dinh_danh: "Mã định danh",
   kenh: "Kênh", danh_muc: "Danh mục", gia_chuan: "Giá chuẩn", trang_thai: "Trạng thái",
   ten_ncc: "Nhà cung cấp", ma_ncc: "Mã NCC", tac_gia: "Tác giả",
+  gia_dong: "Tổng tiền sản phẩm sau giảm giá", hoan_tra: "Trạng thái trả hàng/hoàn tiền", phan_loai: "Biến thể sách",
 };
 
 /**
@@ -36,6 +37,7 @@ export function detectFields(headers) {
   // Chuẩn hóa header: bỏ dấu, viết thường, chuyển _, -, . thành khoảng trắng
   const norm = headers.map((h) =>
     removeDiacritics(String(h || ""))
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
       .toLowerCase()
       .replace(/[_\-.]+/g, " ")
       .replace(/\s+/g, " ")
@@ -47,6 +49,9 @@ export function detectFields(headers) {
   // Tính điểm khớp giữa 1 header chuẩn hóa và 1 field
   const computeScore = (headerNorm, field, patterns) => {
     if (!headerNorm) return 0;
+    if (field === 'kenh' && /voucher|discount|giam gia|tro gia|shipping/.test(headerNorm)) return 0;
+    if (field === 'gia' && /tong|total|subtotal|discount|fee|voucher|original|gia goc|uu dai/.test(headerNorm)) return 0;
+    if (field === 'ma_don' && /item|substatus|sub status/.test(headerNorm)) return 0;
     if (field === "gia" && /gia bia|gia niem yet|gia chuan|list price/.test(headerNorm)) return 0;
     if (field === "ma_don" && /status|date|time|trang thai/.test(headerNorm)) return 0;
 
@@ -128,6 +133,22 @@ export function detectFields(headers) {
     }
   });
 
+  // Explicit export schemas take precedence over generic substring matches.
+  const pick = (field, aliases) => {
+    const index = aliases.map(a => norm.indexOf(a)).find(i => i >= 0);
+    if (index !== undefined) mapping[field] = index;
+  };
+  pick('ma_don', ['order number', 'order id', 'ma don hang', 'invoice id']);
+  pick('ma_dinh_danh', ['isbn 13', 'isbn', 'seller sku', 'sku san pham', 'item code']);
+  pick('ten_sp', ['item name', 'product name', 'ten san pham']);
+  pick('ngay', ['thoi gian dat hang', 'create time', 'created time', 'sale date']);
+  pick('trang_thai', ['order status', 'trang thai don hang', 'status']);
+  pick('gia', ['gia uu dai', 'unit price', 'selling price']);
+  pick('phan_loai', ['ten phan loai hang', 'variation']);
+  pick('hoan_tra', ['trang thai tra hang/hoan tien', 'cancelation/return status', 'cancellation/return status']);
+  // These are product-line amounts, not payment totals or shipping fees.
+  pick('gia_dong', ['sku subtotal after discount', 'item subtotal']);
+  if (mapping.gia_dong >= 0) mapping.gia = -1;
   return mapping;
 }
 
@@ -146,9 +167,15 @@ export function buildRows(dataRows, mapping) {
     const ma_don = raw_ma_don || "";
     const ngay = get(r, "ngay");
     const thuong_hieu = get(r, "thuong_hieu");
-    const gia = get(r, "gia");
+    const lineTotal = get(r, 'gia_dong');
+    const quantity = normalizeNumber(get(r, 'so_luong'));
+    const amount = normalizeNumber(lineTotal);
+    const gia = mapping.gia_dong >= 0 ? (amount !== null && quantity > 0 ? amount / quantity : '') : get(r, 'gia');
     const trang_thai = get(r, "trang_thai");
-    const metadata = { __sourceRow: rowIdx + 2, gia_bia: get(r, "gia_chuan"), ten_ncc: get(r, "ten_ncc"), ma_ncc: get(r, "ma_ncc"), tac_gia: get(r, "tac_gia"), __raw: [...r] };
+    const metadata = { __sourceRow: rowIdx + 2, gia_bia: get(r, "gia_chuan"), ten_ncc: get(r, "ten_ncc"), ma_ncc: get(r, "ma_ncc"), tac_gia: get(r, "tac_gia"), __raw: [...r],
+      gia_dong: mapping.gia_dong >= 0 ? amount : null,
+      __priceBasis: mapping.gia_dong >= 0 ? 'PRODUCT_LINE_AFTER_DISCOUNT' : 'UNIT_PRICE',
+      hoan_tra: normalizeText(get(r, 'hoan_tra')), phan_loai: normalizeText(get(r, 'phan_loai')) };
 
     // Trường hợp 1: File có các cột chi nhánh phân phối (Wide format như FAHASA)
     if (mapping.branchColumns && mapping.branchColumns.length > 0) {

@@ -7,6 +7,8 @@ export function getExportData(result) {
     r.issues.map(i => `[${GROUP_LABELS[i.group]} | ${SEVERITY_LABELS[i.severity]}] ${i.detail}`).join(' | ') || 'Không có',
     r.__sourceRow,r.original?.__raw_ten_sp,r.original?.__raw_ma_dinh_danh,r.gia_bia,r.ma_ncc,r.ten_ncc,r.tac_gia,r.revenueDisposition,
   ]);
+  headers.push('Biến thể sách', 'Trạng thái trả hàng/hoàn tiền gốc', 'Trạng thái giao hàng gốc', 'Cơ sở giá bán', 'Tổng tiền sản phẩm nguồn');
+  rows.forEach((r,i) => { const item = result.integrated[i]; r.push(item.phan_loai,item.hoan_tra,item.__raw_trang_thai,item.__priceBasis,item.gia_dong); });
   return { headers, rows };
 }
 

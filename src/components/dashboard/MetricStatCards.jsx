@@ -45,7 +45,7 @@ export function MetricStatCards({
         </div>
 
         <div className="text-[11.5px] text-slate-500 truncate pt-2 border-t border-slate-100 flex items-center gap-1.5">
-          <span>Từ {orderFilesCount} kênh bán lẻ</span>
+          <span>Từ {orderFilesCount} tệp nguồn</span>
         </div>
       </div>
 
@@ -82,7 +82,7 @@ export function MetricStatCards({
                   : "bg-emerald-50 text-emerald-700 border border-emerald-100"
               }`}
             >
-              {isSingleSourceWithoutCatalog ? "Chưa có catalog" : "RQ2 Tối ưu"}
+              {isSingleSourceWithoutCatalog ? "Chưa có catalog" : "Liên kết"}
             </span>
           </div>
         </div>
@@ -92,7 +92,7 @@ export function MetricStatCards({
             <span className="text-amber-600 font-medium">Cần thêm nguồn hoặc Catalog</span>
           ) : (
             <span>
-              {liveMatchedCount}/{result.stats.totalRows} đơn khớp
+              {liveMatchedCount}/{result.stats.totalRows} dòng khớp
               {acceptedManualCount > 0 && ` (+${acceptedManualCount} duyệt tay)`}
             </span>
           )}
@@ -162,7 +162,7 @@ export function MetricStatCards({
         <div className="text-[11.5px] text-slate-500 truncate pt-2 border-t border-slate-100">
           {cancelledPrevented > 0 ? (
             <span className="text-rose-600 font-medium">
-              Đã trừ {formatVND(cancelledPrevented)} đơn hủy
+              Không cộng {formatVND(cancelledPrevented)} từ dòng hủy/hoàn
             </span>
           ) : (
             <span>Chỉ dòng hoàn thành, giá/SL hợp lệ</span>

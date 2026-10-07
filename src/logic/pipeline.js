@@ -1,7 +1,8 @@
 import { buildRows } from './fieldMapping';
 import { runAllChecks, summarizeIssues } from './qualityRules';
-import { normalizeNumber, normalizeDate, normalizeOrderId, normalizeChannel, normalizeOrderStatus, normalizeBrand, normalizeIdCode, normalizeText, validateISBN13 } from './normalize';
+import { normalizeNumber, normalizeDate, normalizeOrderId, normalizeChannel, normalizeOrderStatus, normalizeTransactionStatus, normalizeBrand, normalizeIdCode, normalizeText, validateISBN13 } from './normalize';
 import { runResolutionStrategy } from './strategies';
+import { bookEntityKey } from './bookMatching';
 
 const accepted = status => ['MATCHED_EXACT', 'MATCHED_FUZZY_HIGH', 'MATCHED_CONFIRMED_USER'].includes(status);
 const present = value => value != null && String(value).trim() !== '';
@@ -31,6 +32,9 @@ function finalize(base, decisions = new Map()) {
     }
     if (row._isUnpivoted) issues.push({ rowIndex: i, group: 'schema', severity: 'FLAGGED_ONLY', detail: 'Bảng ngang tham khảo: chưa xác định ý nghĩa số lượng, không tính doanh thu.' });
     if (!present(row.ma_don)) issues.push({ rowIndex: i, group: 'value', severity: 'FLAGGED_ONLY', detail: 'Thiếu mã đơn; không suy đoán mã giao dịch.' });
+    const slash = String(row.__raw_ngay || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (slash && Number(slash[1]) <= 12 && Number(slash[2]) <= 12 && slash[1] !== slash[2]) issues.push({rowIndex:i,group:'temporal',severity:'FLAGGED_ONLY',detail:'Ngày dạng slash có thể là DD/MM hoặc MM/DD; đang dùng DD/MM, cần đối soát nguồn.'});
+    if (row.hoan_tra && row.trang_thai !== normalizeOrderStatus(row.__raw_trang_thai)) issues.push({rowIndex:i,group:'semantic',severity:'FLAGGED_ONLY',detail:`Đã xét trạng thái trả hàng/hoàn tiền (${row.hoan_tra}); trạng thái giao hàng gốc: ${row.__raw_trang_thai || 'thiếu'}.`});
   });
   const byRow = new Map();
   issues.forEach(issue => { if (!byRow.has(issue.rowIndex)) byRow.set(issue.rowIndex, []); byRow.get(issue.rowIndex).push(issue); });
@@ -43,9 +47,9 @@ function finalize(base, decisions = new Map()) {
       ten_sp: product?.ten_sp || row.ten_sp,
       ma_dinh_danh: product?.ma_dinh_danh || row.ma_dinh_danh,
       thuong_hieu: product?.thuong_hieu || row.thuong_hieu,
-      productKey: product ? `CAT:${base.catalog.findIndex(c => c === product || (c.ma_dinh_danh === product.ma_dinh_danh && c.ten_sp === product.ten_sp))}` : `SOURCE:${row.__source}:${row.ma_dinh_danh || row.ten_sp || i}`,
+      productKey: product ? `CAT:${base.catalog.findIndex(c => c === product || (normalizeIdCode(c.ma_dinh_danh) === normalizeIdCode(product.ma_dinh_danh) && c.ten_sp === product.ten_sp && c.__sourceEntityKey === product.__sourceEntityKey))}` : `SOURCE:${row.__source}:${row.ma_dinh_danh || row.ten_sp ? bookEntityKey(row) : i}`,
       so_luong: qty, gia: price,
-      thanh_tien: qty === null || price === null ? null : qty * price,
+      thanh_tien: qty === null || price === null ? null : row.__priceBasis === 'PRODUCT_LINE_AFTER_DISCOUNT' ? row.gia_dong : qty * price,
       revenueDisposition: revenueDisposition(row),
       issues: byRow.get(i) || [],
     };
@@ -103,7 +107,7 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
         ten_ncc: normalizeText(row.ten_ncc), ma_ncc: normalizeText(row.ma_ncc), tac_gia: normalizeText(row.tac_gia),
         ngay: normalizeDate(row.ngay) || (row.ngay instanceof Date ? String(row.ngay) : row.ngay),
         kenh: normalizeChannel(row.kenh) || normalizeChannel(file.channelLabel),
-        trang_thai: normalizeOrderStatus(row.trang_thai),
+        trang_thai: normalizeTransactionStatus(row.trang_thai, row.hoan_tra),
       };
       const count = (field, bucket) => { if (present(row[field]) && values[field] !== row[field]) normStats[bucket]++; };
       count('ma_dinh_danh','idCount'); count('ma_don','idCount'); count('ten_sp','textCount'); count('thuong_hieu','textCount');

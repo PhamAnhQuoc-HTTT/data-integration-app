@@ -51,7 +51,19 @@
 
 ## Kiểm tra
 
+### Định dạng xuất của sàn và POS
+
+- Tiêu đề camelCase được tách từ trước khi nhận diện. Mã đơn Lazada là orderNumber, không phải orderItemId. Mã sách ưu tiên ISBN trong danh mục và sellerSku/Seller SKU/SKU sản phẩm trong đơn hàng.
+- Voucher, giảm giá và phí không được nhận diện thành kênh bán. Khi nguồn không có cột kênh, giao diện dùng tên tệp để xác định kênh.
+- Shopee lấy Giá ưu đãi theo đơn vị. Lazada lấy itemSubtotal, TikTok lấy SKU Subtotal After Discount làm giá trị sản phẩm sau giảm giá; đơn giá hiển thị là tổng dòng chia số lượng. Không nhân tổng dòng lần thứ hai. Tổng thanh toán, phí vận chuyển và phí sàn không thay thế tổng sản phẩm. Đây là quy ước cho các file xuất đang hỗ trợ, cần xác nhận khi đổi cấu trúc nguồn.
+- Hoàn tiền/trả hàng đã hoàn tất loại dòng khỏi giá trị bán hoàn thành. Yêu cầu hoàn tiền đang xử lý hoặc chưa rõ được giữ chờ đối soát. Trạng thái giao hàng gốc và hoàn tiền được giữ riêng trong file xuất.
+- Số serial Excel có phần giờ được chuyển về ngày. Ngày slash có thể suy ra MM/DD khi phần thứ hai lớn hơn 12. Trường hợp cả hai phần <=12 vẫn dùng DD/MM và cảnh báo cần đối soát. Ngày không tồn tại không tự sửa.
+- Cột biến thể được lưu và xét khi so khớp; Combo không được ghép với sách lẻ chỉ vì mã/tên giống nhau. Master Source giữ riêng các biến thể cùng mã, dùng giá giao dịch trung bình trong từng nhóm làm tham chiếu (không phải giá bìa). Nguồn khác thiếu thông tin phân biệt giữa nhiều ứng viên được chuyển sang duyệt; mã trùng không đủ để tự chọn ứng viên cuối cùng trong danh mục. Danh mục tải riêng vẫn bị chặn khi có mã trùng mâu thuẫn.
+- ISBN sai checksum là cảnh báo; không chặn việc nhập hoặc khớp mã mô phỏng.
+
 Chạy `npm test`, `npm run build`, `npm run lint`. Bộ regression bao phủ lỗi đầu vào, date, unpivot, HITL, Crosswalk, dòng trùng, ISBN và thống nhất số liệu. Có kiểm tra render HTML tĩnh cho HITL; chưa thay thế kiểm thử tương tác trình duyệt với các file thực tế.
+
+Bộ kiểm thử dữ liệu pilot sinh dữ liệu và round-trip Excel trong bộ nhớ, không phụ thuộc outputs/ hoặc sample-data/new/. Khi commit phải đưa kèm scripts/bookDataset.mjs và các bài kiểm thử mới. Khởi chạy pipeline xóa kết quả/duyệt/lọc của lần chạy trước ngay cả khi lần chạy mới thất bại. Reset và chạy lại cũng xóa quyết định HITL.
 
 ## Công việc nghiên cứu tiếp theo
 

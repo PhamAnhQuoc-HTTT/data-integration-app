@@ -148,6 +148,10 @@ export default function App() {
   const readyToProcess = orderFiles.length > 0 && orderFiles.every((f) => f.dataRows.length > 0);
 
   const processAll = async () => {
+    setResult(null);
+    setManualConfirmations(new Map());
+    setActiveTab('overview');
+    setIssueGroupFilter('ALL');
     setStep("processing");
     setProcIdx(0);
     await delay(350);
@@ -345,6 +349,7 @@ export default function App() {
               <p>Cột internal_code và standard_code; thêm source (tên tệp đơn hàng) nếu mã nội bộ khác nhau giữa các nguồn. Trong mỗi nguồn, một mã chỉ được trỏ đến một mã chuẩn đã có trong danh mục.</p>
               {crosswalk.length > 0 && <p>Đã nạp {crosswalk.length} ánh xạ. <button type="button" onClick={() => setCrosswalk([])} className="text-rose-700 underline">Xóa Crosswalk</button></p>}
               <p>Bảng ngang theo chi nhánh được giữ để đối soát, không tính doanh thu khi chưa xác định nghiệp vụ. Giá bìa không thay thế giá bán.</p>
+              <p>Shopee dùng giá ưu đãi theo đơn vị; Lazada/TikTok dùng tổng tiền sản phẩm sau giảm giá khi có cột này. Giá trị báo cáo chưa trừ phí sàn và phí vận chuyển. Trạng thái hoàn tiền được xét cùng trạng thái giao hàng.</p>
             </div>
             <div className="pt-4 flex flex-col items-center gap-2.5">
               <button
@@ -398,7 +403,7 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-sm font-bold text-slate-900">
-                      Tích Hợp Hoàn Tất: {result.stats.totalRows.toLocaleString()} đơn hàng
+                      Tích Hợp Hoàn Tất: {result.stats.totalRows.toLocaleString()} dòng dữ liệu
                     </h2>
                     <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-semibold">
                       {result.strategyLabel}

@@ -22,6 +22,8 @@ export function executeMasterSourceStrategy({
   const catalog = masterEntities.map((e) => ({
     ma_dinh_danh: e.ma_dinh_danh,
     ten_sp: e.ten_sp,
+    phan_loai: e.phan_loai,
+    __sourceEntityKey: e.entityKey,
     thuong_hieu: e.thuong_hieu,
     danh_muc: `Chuẩn từ nguồn ${masterFileName}`,
     gia_chuan: e.gia_chuan,
