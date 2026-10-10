@@ -136,11 +136,11 @@ describe('input preservation and book business rules', () => {
     expect(r.revenueTotal).toBe(300);
   });
   it('uses one exclusion policy for all revenue views', () => {
-    const r=runPipeline([file([row(),row('D2','Book','SKU1','100','Hoàn tiền'),row('D3','Book','SKU1','100','refund requested')])]);
+    const r=runPipeline([file([row(),row('D2','Book','SKU1','100','Đã hoàn tiền'),row('D3','Book','SKU1','100','refund requested'),row('D4','Book','SKU1','100','Hoàn tiền')])]);
     expect(r.revenueTotal).toBe(100);
     expect(r.revenueByChannel.reduce((s,x)=>s+x.doanhThu,0)).toBe(100);
     expect(r.governanceAudit.cancelledRevenuePrevented).toBe(100);
-    expect(r.governanceAudit.unconfirmedRevenue).toBe(100);
+    expect(r.governanceAudit.unconfirmedRevenue).toBe(200);
   });
   it('uses unique source identities despite equal filenames', () => {
     const r=runPipeline([file([row()]),file([row('D2')])]);

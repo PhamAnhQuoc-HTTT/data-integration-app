@@ -149,7 +149,7 @@ export function isValidDate(value) {
 
 export function normalizeTransactionStatus(status, returnStatus) {
   const value = removeDiacritics(returnStatus || '').toLowerCase().trim();
-  if (/^(da hoan tien|refunded|refund completed|da tra hang|returned|hoan tien|tra hang)$/.test(value)) return 'Trả hàng';
+  if (/^(da hoan tien|refunded|refund completed|da tra hang|returned)$/.test(value)) return 'Trả hàng';
   if (/^(cancelled|canceled|da huy)$/.test(value)) return 'Đã hủy';
   if (value && !/^(khong tra hang|no return|none|not requested)$/.test(value)) return 'Chờ đối soát trả hàng/hoàn tiền';
   return normalizeOrderStatus(status);
@@ -264,11 +264,17 @@ export function normalizeOrderStatus(value) {
     'pending': 'Đang xử lý',
     'dang giao': 'Đang xử lý',
     'shipping': 'Đang xử lý',
+    'dang van chuyen': 'Đang xử lý',
+    'tra hang/hoan tien': 'Chờ đối soát trả hàng/hoàn tiền',
+    'cho doi soat tra hang/hoan tien': 'Chờ đối soát trả hàng/hoàn tiền',
     'tra hang': 'Trả hàng',
     'returned': 'Trả hàng',
     'hoan tra': 'Trả hàng',
-    'refund': 'Trả hàng',
-    'hoan tien': 'Trả hàng',
+    'refund': 'Chờ đối soát trả hàng/hoàn tiền',
+    'hoan tien': 'Chờ đối soát trả hàng/hoàn tiền',
+    'da hoan tien': 'Trả hàng',
+    'refund completed': 'Trả hàng',
+    'da tra hang': 'Trả hàng',
     'refunded': 'Trả hàng'
   };
   
@@ -289,7 +295,7 @@ export function normalizeBrand(value) {
   // 1. Sách & NXB
   if (matchStr.includes("kim dong")) return "NXB Kim Đồng";
   if (matchStr.includes("nha xuat ban tre") || matchStr.includes("nxb tre") || matchStr === "tre") return "NXB Trẻ";
-  if (matchStr.includes("nha nam")) return "NXB Nhã Nam";
+  if (matchStr.includes("nha nam")) return "Nhã Nam";
   if (matchStr.includes("hoi nha van")) return "NXB Hội Nhà Văn";
   if (matchStr.includes("the gioi")) return "NXB Thế Giới";
   if (matchStr.includes("tong hop")) return "NXB Tổng Hợp TP.HCM";

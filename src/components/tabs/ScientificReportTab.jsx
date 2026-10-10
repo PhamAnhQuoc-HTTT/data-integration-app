@@ -42,7 +42,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
             <span className="text-[11px] text-slate-500 uppercase font-semibold block mb-0.5">
-              Mã Định Danh (SKU)
+              Mã đơn & mã sản phẩm
             </span>
             <span className="text-xl font-bold font-mono text-indigo-700">
               {norm.idCount || 0}
@@ -86,6 +86,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
           (1) Mã SKU/Barcode định dạng chuẩn, (2) Chuẩn hóa Unicode NFC & loại bỏ khoảng trắng dư, (3) Định dạng số học tiền tệ loại bỏ ký hiệu tiền và phân tách hàng nghìn, (4) Đồng bộ ngày tháng đa chuẩn về ISO 8601 (hỗ trợ cả Excel serial date), (5) Ánh xạ danh mục kênh & trạng thái về tập từ vựng chuẩn, (6) Unpivot đa chi nhánh về dạng bảng quan hệ phẳng, (7) Xuất UTF-8 và phát hiện dấu hiệu lỗi encoding; không tự suy đoán sửa nội dung.
         </div>
         <p className="text-xs text-slate-500 mt-2">Số giá trị số được chuẩn hóa: {norm.numberCount || 0}; dòng unpivot: {norm.structureCount || 0}. Đây là thống kê thao tác, không phải độ chính xác so với Ground Truth.</p>
+        <p className="text-xs text-slate-500 mt-2">Mã đơn đã làm sạch: {norm.orderIdCount || 0}; mã sản phẩm đã làm sạch: {norm.productIdCount || 0}. Ngày slash mặc định DD/MM; giá trị mơ hồ cần đối soát nguồn.</p>
       </div>
 
       {/* ==================== PHẦN 2: RQ2 ==================== */}
@@ -107,6 +108,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
           <AcademicBadge code="RQ2" label="Multi-tier vs Exact" />
         </div>
         <p className="text-xs text-slate-500 mb-3">Tỷ lệ liên kết tự động trước duyệt; không tính ứng viên đang chờ. Precision, recall và F1 cần tập dữ liệu có Ground Truth. Kết quả duyệt tay được phản ánh ở KPI và bảng dữ liệu.</p>
+        <p className="text-xs text-slate-500 mb-3">Liên kết tới bản ghi danh mục không tự chứng minh đúng mọi ấn bản/kiểu bìa. Giữ biến thể nguồn; Combo chưa rõ thành phần không tự tách hoặc ghép thành sách lẻ.</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           {/* Card 1: Exact Only */}
@@ -204,7 +206,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
               Giá trị giao dịch tính được
             </span>
             <div className="text-xl font-black font-mono text-slate-700 mt-2">
-              {formatVND(gov.rawRevenueTotal || result.revenueTotal)}
+              {formatVND(gov.rawRevenueTotal ?? result.revenueTotal)}
             </div>
             <span className="text-[11px] text-slate-400 mt-1 block">Bao gồm cả dòng hủy/hoàn và trạng thái chưa xác nhận</span>
           </div>
@@ -214,7 +216,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
               Giá trị bán đủ điều kiện
             </span>
             <div className="text-xl font-black font-mono text-emerald-700 mt-2">
-              {formatVND(gov.cleanRevenueTotal || result.revenueTotal)}
+              {formatVND(gov.cleanRevenueTotal ?? result.revenueTotal)}
             </div>
             <span className="text-[11px] text-emerald-600 mt-1 block font-medium">
               Chỉ dòng hoàn thành, giá và số lượng hợp lệ

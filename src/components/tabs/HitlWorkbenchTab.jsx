@@ -11,6 +11,7 @@ function SourceRecord({ item }) {
       <p className="text-[11px] text-slate-500 mb-1">Dữ liệu nguồn · Đơn: {item.ma_don || "—"} · {item.nguon}</p>
       <p className="font-semibold text-xs text-slate-900">{original.__raw_ten_sp || original.ten_sp || "(Chưa có tên)"}</p>
       <p className="text-[11px] font-mono text-slate-500 mt-1">Mã nguồn: {original.__raw_ma_dinh_danh || original.ma_dinh_danh || "—"}</p>
+      {original.phan_loai && <p className="text-[11px] text-slate-600 mt-1">Biến thể nguồn: {original.phan_loai}</p>}
     </div>
   );
 }
@@ -46,6 +47,7 @@ export function HitlWorkbenchTab({ pendingConfirmations, manualConfirmations, on
                   <p className="text-[11px] text-slate-500 mb-1">Đề xuất liên kết</p>
                   <p className="font-semibold text-xs">{candidate.ten_sp}</p>
                   <p className="text-[11px] font-mono mt-1">Mã đề xuất: {candidate.ma_dinh_danh || "—"}</p>
+                  <p className="text-[11px] mt-1">Biến thể danh mục: {candidate.phan_loai || 'Chưa có thông tin'}</p>
                   {price !== null && <p className="text-[11px] mt-1">Giá tham chiếu{candidate.isSynthesized || candidate.isClustered || candidate.isMasterSource ? " (tổng hợp từ nguồn)" : ""}: {price.toLocaleString("vi-VN")} ₫</p>}
                 </div>
               </div>
@@ -65,6 +67,7 @@ export function HitlWorkbenchTab({ pendingConfirmations, manualConfirmations, on
         {unlinked.map(item => <div key={item.rowIndex} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
           <SourceRecord item={item} />
           <p className="text-xs text-slate-600">Được giữ riêng trong dữ liệu tích hợp; chưa xác lập liên kết.</p>
+          {item.matchReason === 'VARIANT_CONFLICT' && <p className="text-xs text-amber-800">Mã có trong danh mục nhưng biến thể/Combo không tương thích. Muốn tách Combo cần danh sách sách thành phần, số lượng và quy tắc phân bổ giá; hệ thống không tự đoán.</p>}
         </div>)}
       </section>}
     </div>

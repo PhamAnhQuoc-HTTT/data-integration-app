@@ -103,6 +103,7 @@ export function resolveEntities(
     let status = "UNRESOLVED";
     let score = 0;
     let tier = null;
+    let reviewReason = null;
 
     // Baseline Exact Matching (Để đánh giá so sánh RQ2)
     const selectCandidates = candidates => {
@@ -116,6 +117,8 @@ export function resolveEntities(
       return specified.length ? specified : compatible;
     };
     const idCandidates = selectCandidates(catalogById.get(idKey) || []);
+    let catalogIdExists = Boolean(idKey && catalogById.has(idKey));
+    let variantConflict = catalogIdExists && !idCandidates.length;
     const idHit = idCandidates.length === 1 ? idCandidates[0] : null;
     const canExactMatch = Boolean(idHit && !bookConflict(row, idHit) &&
       (!masterSource || row.__source === masterSource || isSharedBookId(idKey)));
@@ -141,7 +144,10 @@ export function resolveEntities(
       const mappedStandardId = crosswalkById.get(crosswalkKey);
       // A crosswalk translates identifier namespaces; still check edition/binding.
       const mappedRow = { ...row, ma_dinh_danh: mappedStandardId };
-      const hits = (catalogById.get(String(mappedStandardId).replace(/[\s-]/g, '').toUpperCase()) || []).filter(c => !bookConflict(mappedRow, c));
+      const mappedCandidates = catalogById.get(String(mappedStandardId).replace(/[\s-]/g, '').toUpperCase()) || [];
+      const hits = mappedCandidates.filter(c => !bookConflict(mappedRow, c));
+      catalogIdExists = catalogIdExists || mappedCandidates.length > 0;
+      variantConflict = variantConflict || (mappedCandidates.length > 0 && hits.length === 0);
       const variants = bookVariantKey(row) ? hits.filter(c => bookVariantKey(c) === bookVariantKey(row)) : [];
       const candidates = variants.length ? variants : hits;
       if (candidates.length === 1) {
@@ -183,6 +189,7 @@ export function resolveEntities(
             tier3HighCount++;
           } else {
             status = "NEEDS_CONFIRMATION";
+            reviewReason = bestScore - runnerUpScore <= 5 ? 'AMBIGUOUS_CANDIDATES' : 'FUZZY_REVIEW';
             tier = "tier3_fuzzy_confirm";
             tier3ConfirmCount++;
           }
@@ -200,6 +207,12 @@ export function resolveEntities(
       matchStatus: status,
       matchScore: score,
       matchTier: tier,
+      __catalogIdExists: catalogIdExists,
+      matchReason: status === 'UNRESOLVED'
+        ? (variantConflict ? 'VARIANT_CONFLICT' : idKey && !catalogIdExists ? 'ID_NOT_FOUND' : 'NO_SUITABLE_CANDIDATE')
+        : status === 'NEEDS_CONFIRMATION' ? reviewReason
+        : tier === 'tier1_id_exact' ? 'IDENTIFIER_MATCH'
+        : tier === 'tier2_crosswalk' ? 'CROSSWALK_MATCH' : 'FUZZY_HIGH',
       _exactMatchOnly: canExactMatch,
     };
   });

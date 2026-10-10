@@ -92,9 +92,9 @@ export function OrdersDropzone({
       {files.length > 0 && (
         <div className="mt-3 space-y-2.5 flex-1">
           {files.map((fileState, i) => {
-            const mappedCount = Object.entries(fileState.mapping || {}).filter(
+            const mappedCount = new Set(Object.entries(fileState.mapping || {}).filter(
               ([k, idx]) => k !== "branchColumns" && idx >= 0
-            ).length;
+            ).map(([, idx]) => idx)).size;
 
             return (
               <div

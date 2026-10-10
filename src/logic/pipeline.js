@@ -34,6 +34,7 @@ function finalize(base, decisions = new Map()) {
     if (!present(row.ma_don)) issues.push({ rowIndex: i, group: 'value', severity: 'FLAGGED_ONLY', detail: 'Thiếu mã đơn; không suy đoán mã giao dịch.' });
     const slash = String(row.__raw_ngay || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     if (slash && Number(slash[1]) <= 12 && Number(slash[2]) <= 12 && slash[1] !== slash[2]) issues.push({rowIndex:i,group:'temporal',severity:'FLAGGED_ONLY',detail:'Ngày dạng slash có thể là DD/MM hoặc MM/DD; đang dùng DD/MM, cần đối soát nguồn.'});
+    if (slash && Number(slash[2]) > 12 && normalizeDate(row.__raw_ngay)) issues.push({rowIndex:i,group:'temporal',severity:'FLAGGED_ONLY',detail:'Ngày nguồn dùng MM/DD không mơ hồ, khác quy ước DD/MM mặc định; đã đọc đúng cấu trúc, cần kiểm tra quy ước của nguồn.'});
     if (row.hoan_tra && row.trang_thai !== normalizeOrderStatus(row.__raw_trang_thai)) issues.push({rowIndex:i,group:'semantic',severity:'FLAGGED_ONLY',detail:`Đã xét trạng thái trả hàng/hoàn tiền (${row.hoan_tra}); trạng thái giao hàng gốc: ${row.__raw_trang_thai || 'thiếu'}.`});
   });
   const byRow = new Map();
@@ -47,6 +48,15 @@ function finalize(base, decisions = new Map()) {
       ten_sp: product?.ten_sp || row.ten_sp,
       ma_dinh_danh: product?.ma_dinh_danh || row.ma_dinh_danh,
       thuong_hieu: product?.thuong_hieu || row.thuong_hieu,
+      // Enrich only established links, never a pending or rejected candidate.
+      gia_bia: product?.gia_bia !== '' && product?.gia_bia != null ? product.gia_bia : row.gia_bia,
+      gia_tham_chieu: product?.gia_chuan ?? null,
+      ma_ncc: product?.ma_ncc || row.ma_ncc,
+      ten_ncc: product?.ten_ncc || row.ten_ncc,
+      tac_gia: product?.tac_gia || row.tac_gia,
+      thuong_hieu_nguon: row.__raw_thuong_hieu ?? row.thuong_hieu,
+      ten_ncc_nguon: row.ten_ncc,
+      ma_ncc_nguon: row.ma_ncc,
       productKey: product ? `CAT:${base.catalog.findIndex(c => c === product || (normalizeIdCode(c.ma_dinh_danh) === normalizeIdCode(product.ma_dinh_danh) && c.ten_sp === product.ten_sp && c.__sourceEntityKey === product.__sourceEntityKey))}` : `SOURCE:${row.__source}:${row.ma_dinh_danh || row.ten_sp ? bookEntityKey(row) : i}`,
       so_luong: qty, gia: price,
       thanh_tien: qty === null || price === null ? null : row.__priceBasis === 'PRODUCT_LINE_AFTER_DISCOUNT' ? row.gia_dong : qty * price,
@@ -96,7 +106,7 @@ export function applyManualDecisions(result, decisions) {
 export function runPipeline(orderFiles, catalogFile = null, options = {}) {
   const { resolutionStrategy = 'BIPARTITE', fuzzyHighThreshold = 90, fuzzyConfirmThreshold = 70, masterSourceIndex = 0, crosswalk = [], priceDeviationThreshold = 30 } = options;
   if (fuzzyConfirmThreshold > fuzzyHighThreshold) throw new Error('Ngưỡng cần duyệt phải nhỏ hơn hoặc bằng ngưỡng tự động ghép.');
-  const normStats = { idCount: 0, textCount: 0, numberCount: 0, dateCount: 0, channelCount: 0, statusCount: 0, structureCount: 0, encodingFixedCount: 0 };
+  const normStats = { idCount: 0, orderIdCount: 0, productIdCount: 0, textCount: 0, numberCount: 0, dateCount: 0, channelCount: 0, statusCount: 0, structureCount: 0, encodingFixedCount: 0 };
   const sourceRowsMap = new Map();
   const preparedFiles = orderFiles.map((file, idx) => ({ ...file, sourceName: file.fileName || `Tệp ${idx+1}`, fileName: `SOURCE-${idx}` }));
   const allRows = preparedFiles.flatMap((file, idx) => {
@@ -111,11 +121,12 @@ export function runPipeline(orderFiles, catalogFile = null, options = {}) {
       };
       const count = (field, bucket) => { if (present(row[field]) && values[field] !== row[field]) normStats[bucket]++; };
       count('ma_dinh_danh','idCount'); count('ma_don','idCount'); count('ten_sp','textCount'); count('thuong_hieu','textCount');
+      count('ma_dinh_danh','productIdCount'); count('ma_don','orderIdCount');
       count('ngay','dateCount'); count('kenh','channelCount'); count('trang_thai','statusCount');
       ['gia','so_luong'].forEach(f => { if (present(row[f]) && normalizeNumber(row[f]) !== null && String(normalizeNumber(row[f])) !== String(row[f])) normStats.numberCount++; });
       if (row._isUnpivoted) normStats.structureCount++;
       return { ...row, ...values, __source: file.fileName, __sourceName: file.sourceName, __sourceIndex: idx,
-        __raw_ma_dinh_danh: row.ma_dinh_danh, __raw_ten_sp: row.ten_sp, __raw_ngay: row.ngay, __raw_kenh: row.kenh, __raw_trang_thai: row.trang_thai };
+        __raw_ma_dinh_danh: row.ma_dinh_danh, __raw_ten_sp: row.ten_sp, __raw_thuong_hieu: row.thuong_hieu, __raw_ngay: row.ngay, __raw_kenh: row.kenh, __raw_trang_thai: row.trang_thai };
     });
     sourceRowsMap.set(file.fileName, rows); return rows;
   });

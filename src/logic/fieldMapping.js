@@ -17,15 +17,16 @@ export const FIELD_PATTERNS = {
   ma_dinh_danh: ["barcode", "isbn", "ma vach", "upc", "ean", "sku id", "sku", "ma dinh danh", "ma san pham chuan", "ma sp chuan", "ma san pham", "ma sp", "item code"],
   kenh: ["kenh", "channel", "chi nhanh", "nha sach", "cua hang", "platform"],
   danh_muc: ["the loai", "danh muc", "category", "genre", "phan loai"],
-  gia_chuan: ["gia bia", "gia niem yet", "gia goc", "gia chuan", "list price"],
+  gia_chuan: ["gia bia", "gia niem yet", "gia chuan", "list price"],
+  gia_goc: ["gia goc", "sku unit original price", "original price"],
   trang_thai: ["trang thai", "status", "tinh trang", "order status", "state"],
 };
 
 export const FIELD_LABELS = {
-  ma_don: "Mã đơn", ngay: "Ngày", ten_sp: "Tên sản phẩm", thuong_hieu: "Thương hiệu/NCC",
+  ma_don: "Mã đơn", ngay: "Ngày", ten_sp: "Tên sản phẩm", thuong_hieu: "NXB/Thương hiệu (nguồn)",
   so_luong: "Số lượng", gia: "Giá bán", ma_dinh_danh: "Mã định danh",
   kenh: "Kênh", danh_muc: "Danh mục", gia_chuan: "Giá chuẩn", trang_thai: "Trạng thái",
-  ten_ncc: "Nhà cung cấp", ma_ncc: "Mã NCC", tac_gia: "Tác giả",
+  ten_ncc: "Nhà cung cấp", ma_ncc: "Mã NCC", tac_gia: "Tác giả", gia_goc: "Giá gốc nguồn", gia_bia: "Giá bìa",
   gia_dong: "Tổng tiền sản phẩm sau giảm giá", hoan_tra: "Trạng thái trả hàng/hoàn tiền", phan_loai: "Biến thể sách",
 };
 
@@ -86,7 +87,7 @@ export function detectFields(headers) {
 
   // Thứ tự ưu tiên nhận diện để tránh tranh chấp cột
   const fieldPriority = [
-    "ma_don", "ma_dinh_danh", "ma_ncc", "ten_ncc", "tac_gia", "thuong_hieu", "ten_sp", "gia_chuan", "gia",
+    "ma_don", "ma_dinh_danh", "ma_ncc", "ten_ncc", "tac_gia", "thuong_hieu", "ten_sp", "gia_chuan", "gia_goc", "gia",
     "so_luong", "ngay", "kenh", "trang_thai", "danh_muc"
   ];
 
@@ -144,6 +145,9 @@ export function detectFields(headers) {
   pick('ngay', ['thoi gian dat hang', 'create time', 'created time', 'sale date']);
   pick('trang_thai', ['order status', 'trang thai don hang', 'status']);
   pick('gia', ['gia uu dai', 'unit price', 'selling price']);
+  pick('gia_goc', ['gia goc', 'sku unit original price', 'original price']);
+  mapping.gia_bia = -1;
+  pick('gia_bia', ['gia bia', 'gia niem yet', 'list price']);
   pick('phan_loai', ['ten phan loai hang', 'variation']);
   pick('hoan_tra', ['trang thai tra hang/hoan tien', 'cancelation/return status', 'cancellation/return status']);
   // These are product-line amounts, not payment totals or shipping fees.
@@ -172,7 +176,7 @@ export function buildRows(dataRows, mapping) {
     const amount = normalizeNumber(lineTotal);
     const gia = mapping.gia_dong >= 0 ? (amount !== null && quantity > 0 ? amount / quantity : '') : get(r, 'gia');
     const trang_thai = get(r, "trang_thai");
-    const metadata = { __sourceRow: rowIdx + 2, gia_bia: get(r, "gia_chuan"), ten_ncc: get(r, "ten_ncc"), ma_ncc: get(r, "ma_ncc"), tac_gia: get(r, "tac_gia"), __raw: [...r],
+    const metadata = { __sourceRow: rowIdx + 2, gia_bia: get(r, mapping.gia_bia === undefined ? "gia_chuan" : "gia_bia"), gia_goc: get(r, "gia_goc"), ten_ncc: get(r, "ten_ncc"), ma_ncc: get(r, "ma_ncc"), tac_gia: get(r, "tac_gia"), __raw: [...r],
       gia_dong: mapping.gia_dong >= 0 ? amount : null,
       __priceBasis: mapping.gia_dong >= 0 ? 'PRODUCT_LINE_AFTER_DISCOUNT' : 'UNIT_PRICE',
       hoan_tra: normalizeText(get(r, 'hoan_tra')), phan_loai: normalizeText(get(r, 'phan_loai')) };
@@ -238,6 +242,10 @@ export function buildCatalog(dataRows, mapping) {
         thuong_hieu: get("thuong_hieu"),
         danh_muc: get("danh_muc") || "Sách & Văn hóa phẩm",
         gia_chuan: get("gia_chuan") || get("gia"),
+        // Source/catalog reference prices are not inferred from discounted sales.
+        gia_bia: get(mapping.gia_bia === undefined ? "gia_chuan" : "gia_bia"),
+        ma_ncc: get("ma_ncc"), ten_ncc: get("ten_ncc"), tac_gia: get("tac_gia"),
+        phan_loai: get("phan_loai"),
       };
     })
     .filter((r) => r.ten_sp || r.ma_dinh_danh);
