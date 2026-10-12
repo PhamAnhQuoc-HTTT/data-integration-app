@@ -44,7 +44,7 @@ export function MetricStatCards({
           </div>
         </div>
 
-        <div className="text-[11.5px] text-slate-500 truncate pt-2 border-t border-slate-100 flex items-center gap-1.5">
+        <div className="text-[11.5px] text-slate-500 break-words leading-5 pt-2 border-t border-slate-100 flex items-center gap-1.5">
           <span>Từ {orderFilesCount} tệp nguồn</span>
         </div>
       </div>
@@ -67,7 +67,7 @@ export function MetricStatCards({
         </div>
 
         <div className="my-auto py-1">
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-wrap items-baseline gap-2">
             <span
               className={`text-2xl sm:text-[26px] font-bold font-mono tracking-tight ${
                 isSingleSourceWithoutCatalog ? "text-slate-500" : "text-emerald-600"
@@ -87,7 +87,7 @@ export function MetricStatCards({
           </div>
         </div>
 
-        <div className="text-[11.5px] text-slate-500 truncate pt-2 border-t border-slate-100">
+        <div className="text-[11.5px] text-slate-500 break-words leading-5 pt-2 border-t border-slate-100">
           {isSingleSourceWithoutCatalog ? (
             <span className="text-amber-600 font-medium">Cần thêm nguồn hoặc Catalog</span>
           ) : (
@@ -101,6 +101,15 @@ export function MetricStatCards({
 
       {/* CARD 3: Vấn đề dữ liệu phát hiện (RQ3) */}
       <div
+        role={issuesCount > 0 ? "button" : undefined}
+        tabIndex={issuesCount > 0 ? 0 : undefined}
+        aria-label={issuesCount > 0 ? "Xem các vấn đề chất lượng dữ liệu" : undefined}
+        onKeyDown={event => {
+          if (issuesCount > 0 && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            onNavigateTab("issues");
+          }
+        }}
         className="bg-white border border-slate-200/90 rounded-xl px-5 sm:px-6 py-4.5 shadow-2xs hover:border-slate-300 hover:shadow-xs transition-all flex flex-col justify-between min-h-[138px] cursor-pointer group"
         onClick={issuesCount > 0 ? () => onNavigateTab("issues") : undefined}
       >
@@ -118,7 +127,7 @@ export function MetricStatCards({
         </div>
 
         <div className="my-auto py-1">
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-wrap items-baseline gap-2">
             <span
               className={`text-2xl sm:text-[26px] font-bold font-mono tracking-tight ${
                 issuesCount === 0 ? "text-emerald-600" : "text-amber-600"
@@ -134,8 +143,8 @@ export function MetricStatCards({
           </div>
         </div>
 
-        <div className="text-[11.5px] text-slate-500 truncate pt-2 border-t border-slate-100">
-          {issuesCount === 0 ? "Toàn bộ dữ liệu sạch" : "Phát hiện qua 6 chiều kiểm soát"}
+        <div className="text-[11.5px] text-slate-500 break-words leading-5 pt-2 border-t border-slate-100">
+          {issuesCount === 0 ? "Không phát hiện vấn đề theo quy tắc" : "Phát hiện qua 6 chiều kiểm soát"}
         </div>
       </div>
 
@@ -152,14 +161,14 @@ export function MetricStatCards({
 
         <div className="my-auto py-1">
           <div
-            className="text-xl sm:text-[23px] font-bold font-mono text-slate-900 tracking-tight truncate"
+            className="text-xl sm:text-[23px] font-bold font-mono text-slate-900 tracking-tight break-words"
             title={formatVND(result.revenueTotal)}
           >
             {formatVND(result.revenueTotal)}
           </div>
         </div>
 
-        <div className="text-[11.5px] text-slate-500 truncate pt-2 border-t border-slate-100">
+        <div className="text-[11.5px] text-slate-500 break-words leading-5 pt-2 border-t border-slate-100">
           {cancelledPrevented > 0 ? (
             <span className="text-rose-600 font-medium">
               Không cộng {formatVND(cancelledPrevented)} từ dòng hủy/hoàn

@@ -1,10 +1,11 @@
+import { MappingDetails } from "./MappingDetails";
 import React, { useCallback } from "react";
-import { UploadCloud, CheckCircle2, Trash2, ShoppingCart, Info, Store } from "lucide-react";
-import { FIELD_LABELS } from "../../logic/fieldMapping";
+import { UploadCloud, CheckCircle2, Trash2, ShoppingCart, Store } from "lucide-react";
 
 export function OrdersDropzone({
   files,
-  onAddFile,
+  onAddFiles,
+  busy = false,
   onRemoveFile,
   onUpdateChannelLabel,
   maxFiles,
@@ -19,11 +20,10 @@ export function OrdersDropzone({
     (e) => {
       e.preventDefault();
       setDragOverKey(null);
-      if (full) return;
-      const f = e.dataTransfer.files?.[0];
-      if (f) onAddFile(f);
+      if (busy) return;
+      onAddFiles(Array.from(e.dataTransfer.files || []));
     },
-    [onAddFile, setDragOverKey, full]
+    [onAddFiles, setDragOverKey, busy]
   );
 
   return (
@@ -33,7 +33,7 @@ export function OrdersDropzone({
           <ShoppingCart size={20} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-slate-900 leading-tight">
               Tệp Đơn Hàng Đa Nguồn (Multi-source)
             </h3>
@@ -51,7 +51,7 @@ export function OrdersDropzone({
         <>
           <label
             htmlFor={inputId}
-            className={`border-2 border-dashed rounded-xl py-6 px-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition text-center ${
+            className={`border-2 border-dashed rounded-xl py-6 px-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition text-center focus-within:ring-2 focus-within:ring-indigo-500 ${
               dragOverKey === dragKey
                 ? "border-indigo-500 bg-indigo-50/50"
                 : "border-slate-200 hover:border-indigo-400 hover:bg-slate-50/80 bg-slate-50/40"
@@ -68,24 +68,25 @@ export function OrdersDropzone({
             </div>
             <div>
               <span className="text-xs font-semibold text-slate-800 block">
-                Kéo thả hoặc nhấn để chọn tệp đơn hàng
+                Kéo thả hoặc chọn nhiều tệp đơn hàng
               </span>
               <span className="text-[11px] font-mono text-slate-400 mt-0.5 block">
-                Định dạng hỗ trợ: .xlsx, .xls, .csv
+                Tối đa {maxFiles} tệp · .xlsx, .xls, .csv
               </span>
             </div>
-          </label>
           <input
             id={inputId}
             type="file"
             accept=".csv,.xlsx,.xls"
-            className="hidden"
+            multiple
+            disabled={busy}
+            className="sr-only"
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onAddFile(f);
+              onAddFiles(Array.from(e.target.files || []));
               e.target.value = "";
             }}
           />
+          </label>
         </>
       )}
 
@@ -101,7 +102,7 @@ export function OrdersDropzone({
                 key={i}
                 className="rounded-lg p-3 bg-slate-50/80 border border-slate-200 text-xs transition hover:bg-slate-50"
               >
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
                     <span className="font-semibold text-slate-800 truncate" title={fileState.fileName}>
@@ -114,9 +115,10 @@ export function OrdersDropzone({
                     </span>
                     <button
                       type="button"
+                      disabled={busy}
                       onClick={() => onRemoveFile(i)}
-                      aria-label="Xóa tệp"
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                      aria-label={"Xóa tệp " + fileState.fileName}
+                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -131,13 +133,15 @@ export function OrdersDropzone({
                   </span>
                   <input
                     type="text"
+                    aria-label={"Kênh bán của " + fileState.fileName}
                     value={fileState.channelLabel || ""}
                     onChange={(e) => onUpdateChannelLabel(i, e.target.value)}
                     placeholder="VD: Shopee, POS, TikTok Shop…"
-                    className="flex-1 text-xs px-2 py-1 rounded border border-slate-300 bg-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    className="min-w-0 flex-1 text-xs px-2 py-1 rounded border border-slate-300 bg-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
 
+                <MappingDetails fileState={fileState} />
                 {/* Schema Mapping Pills */}
                 <div className="flex flex-wrap gap-1 mt-2">
                   <span className="text-[10.5px] font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
@@ -158,7 +162,7 @@ export function OrdersDropzone({
       {full && (
         <p className="text-xs font-semibold text-emerald-700 mt-2 flex items-center gap-1">
           <CheckCircle2 size={13} />
-          Đã đạt giới hạn tối đa ({maxFiles} file). Sẵn sàng tích hợp!
+          Đã đạt giới hạn ({maxFiles} tệp). Xóa một tệp nếu muốn thay nguồn.
         </p>
       )}
     </div>

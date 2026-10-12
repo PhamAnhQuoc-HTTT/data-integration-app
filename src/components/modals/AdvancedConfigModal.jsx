@@ -1,250 +1,113 @@
-import React, { useState } from "react";
-import { SlidersHorizontal, X, Check, BookOpen, ChevronDown, ChevronUp, Cpu } from "lucide-react";
-import { PRESETS, PresetSelector } from "../upload/PresetSelector";
+import React, { useState } from 'react';
+import { useDialogFocus } from './useDialogFocus';
+import { createPortal } from 'react-dom';
+import { SlidersHorizontal, X, Check, ChevronDown, Cpu } from 'lucide-react';
+import { PRESETS, PresetSelector } from '../upload/PresetSelector';
+import { createConfigDraft, STRATEGY_LABELS, validateUiConfig } from '../../logic/uiConfig';
 
 export function AdvancedConfigModal({
-  isOpen,
-  onClose,
-  activePresetId,
-  config,
-  onSelectPreset,
-  onCustomParamChange,
-  selectedStrategy,
-  setSelectedStrategy,
-  masterSourceIndex,
-  setMasterSourceIndex,
-  orderFiles,
+  onClose, onApply, activePresetId, config, selectedStrategy, masterSourceIndex,
+  orderFiles, hasCatalog = false, crosswalkCount = 0, isResults = false, manualDecisionCount = 0,
 }) {
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [draft, setDraft] = useState(() => createConfigDraft({ activePresetId, config, selectedStrategy, masterSourceIndex }));
+  const [acknowledgedReset, setAcknowledgedReset] = useState(false);
+  const dialogRef = useDialogFocus(onClose);
+  const validationError = validateUiConfig(draft, { hasCatalog, orderFiles, crosswalkCount });
+  const needsResetAcknowledgement = isResults && manualDecisionCount > 0;
+  const canApply = !validationError && (!needsResetAcknowledgement || acknowledgedReset);
 
-  if (!isOpen) return null;
+  const selectPreset = key => setDraft(previous => ({ ...previous, activePresetId: key, config: { ...PRESETS[key].config } }));
+  const changeParam = (field, value) => setDraft(previous => ({ ...previous, activePresetId: 'custom', config: { ...previous.config, [field]: value } }));
+  const parameters = [
+    { field: 'fuzzyConfirmThreshold', label: 'Ngưỡng đưa vào duyệt thủ công', min: 40, max: 90,
+      help: 'Ứng viên đạt ngưỡng này nhưng chưa đủ điều kiện tự động ghép sẽ cần người dùng duyệt.' },
+    { field: 'fuzzyHighThreshold', label: 'Ngưỡng tự động ghép theo tên', min: 75, max: 99,
+      help: 'Chỉ tự động ghép khi đạt ngưỡng, không xung đột ấn bản/biến thể và ứng viên thứ hai kém hơn trên 5 điểm. Điểm tương đồng không phải độ chính xác.' },
+    { field: 'priceDeviationThreshold', label: 'Ngưỡng cảnh báo lệch giá', min: 10, max: 60,
+      help: 'So sánh với giá tham chiếu từ danh mục hoặc nguồn đối chiếu; đây là cảnh báo cần kiểm tra, không tự sửa giá bán.' },
+  ];
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 relative my-8">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <SlidersHorizontal size={18} />
-            </div>
+  const modal = (
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="config-title" aria-describedby="config-description"
+        tabIndex={-1} className="bg-white rounded-2xl max-w-3xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl border border-slate-200 outline-none">
+        <div className="flex items-start justify-between gap-3 p-4 sm:p-6 border-b border-slate-200 shrink-0">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <SlidersHorizontal size={20} className="text-indigo-600 shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-base font-bold text-slate-900 leading-tight">
-                Cấu Hình Tham Số & Chiến Lược Tích Hợp
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Tùy chỉnh độ nghiêm ngặt của bộ quy tắc chất lượng và thuật toán phân giải thực thể
-              </p>
+              <h2 id="config-title" className="text-base font-bold text-slate-900">Cấu hình tích hợp & kiểm toán</h2>
+              <p id="config-description" className="text-xs text-slate-500 mt-1">Chọn gói cấu hình hoặc tùy chỉnh. Thay đổi chỉ được lưu khi nhấn Áp dụng.</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Đóng"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-          >
-            <X size={18} />
-          </button>
+          <button type="button" onClick={onClose} aria-label="Hủy và đóng cấu hình" className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 shrink-0"><X size={18} /></button>
         </div>
 
-        {/* Modal Body */}
-        <div className="py-4 space-y-5 max-h-[70vh] overflow-y-auto pr-1">
-          {/* Preset Selector */}
-          <div>
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-2">
-              1. Chọn Gói Cấu Hình Nghiệp Vụ:
-            </label>
-            <PresetSelector
-              activePresetId={activePresetId}
-              onSelectPreset={onSelectPreset}
-            />
-          </div>
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto min-h-0">
+          <section aria-labelledby="preset-title">
+            <h3 id="preset-title" className="text-xs font-bold text-slate-700 mb-2">Gói cấu hình nghiệp vụ</h3>
+            <PresetSelector activePresetId={draft.activePresetId} onSelectPreset={selectPreset} />
+            {draft.activePresetId === 'custom' && <p className="text-xs text-indigo-700 mt-2">Đang chọn: Tùy chỉnh tham số riêng.</p>}
+          </section>
 
-          {/* Technical Param Sliders */}
-          <div className="border border-slate-200 rounded-xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-              className="w-full flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100/80 transition text-xs font-bold text-slate-800 cursor-pointer"
-            >
-              <span className="flex items-center gap-2">
-                <Cpu size={15} className="text-indigo-600" />
-                <span>Tùy Chỉnh Tham Số Kỹ Thuật (Advanced Hyperparameters)</span>
-              </span>
-              {showTechnicalDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-
-            {showTechnicalDetails && (
-              <div className="p-4 space-y-4 bg-white border-t border-slate-200 text-xs">
-                {/* Fuzzy Confirm Threshold */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-semibold text-slate-800">
-                      Ngưỡng xác nhận thủ công (Fuzzy Confirm):
-                    </span>
-                    <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                      {config.fuzzyConfirmThreshold}%
-                    </span>
+          <details className="group border border-slate-200 rounded-xl">
+            <summary className="p-3.5 cursor-pointer text-xs font-bold text-slate-800 flex items-center gap-2 rounded-xl bg-slate-50">
+              <Cpu size={15} className="text-indigo-600 shrink-0" />Tùy chỉnh tham số kỹ thuật<ChevronDown size={15} className="ml-auto shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="p-4 space-y-4 border-t border-slate-200">
+              {parameters.map(parameter => (
+                <div key={parameter.field}>
+                  <div className="flex justify-between items-start gap-2 text-xs mb-2">
+                    <label htmlFor={parameter.field} className="font-semibold text-slate-800">{parameter.label}</label>
+                    <output htmlFor={parameter.field} className="font-mono text-indigo-700 font-bold">{draft.config[parameter.field]}%</output>
                   </div>
-                  <input
-                    type="range"
-                    min="40"
-                    max="90"
-                    value={config.fuzzyConfirmThreshold}
-                    onChange={(e) =>
-                      onCustomParamChange("fuzzyConfirmThreshold", Number(e.target.value))
-                    }
-                    className="w-full accent-indigo-600"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Bản ghi có độ tương đồng từ {config.fuzzyConfirmThreshold}% trở lên sẽ chuyển vào tab Human-in-the-Loop để người dùng xem xét.
-                  </p>
+                  <input id={parameter.field} type="range" min={parameter.min} max={parameter.max} value={draft.config[parameter.field]}
+                    aria-describedby={parameter.field + '-help'} onChange={event => changeParam(parameter.field, Number(event.target.value))} className="w-full accent-indigo-600" />
+                  <p id={parameter.field + '-help'} className="text-[11px] text-slate-500 mt-1">{parameter.help}</p>
                 </div>
+              ))}
+            </div>
+          </details>
 
-                {/* Fuzzy High Threshold */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-semibold text-slate-800">
-                      Ngưỡng tự động ghép chắc chắn (Fuzzy Auto-Link):
-                    </span>
-                    <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                      {config.fuzzyHighThreshold}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="75"
-                    max="99"
-                    value={config.fuzzyHighThreshold}
-                    onChange={(e) =>
-                      onCustomParamChange("fuzzyHighThreshold", Number(e.target.value))
-                    }
-                    className="w-full accent-indigo-600"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Bản ghi đạt từ {config.fuzzyHighThreshold}% trở lên được hệ thống tự động gán mã định danh mà không cần duyệt tay.
-                  </p>
-                </div>
-
-                {/* Price Deviation Threshold */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-semibold text-slate-800">
-                      Ngưỡng cảnh báo lệch giá (Price Anomaly):
-                    </span>
-                    <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                      {config.priceDeviationThreshold}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="60"
-                    value={config.priceDeviationThreshold}
-                    onChange={(e) =>
-                      onCustomParamChange("priceDeviationThreshold", Number(e.target.value))
-                    }
-                    className="w-full accent-indigo-600"
-                  />
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Gắn cờ cảnh báo nếu giá bán thực tế lệch quá {config.priceDeviationThreshold}% so với giá niêm yết trong danh mục gốc.
-                  </p>
-                </div>
-
-                {/* Strategy Pattern Selection */}
-                <div className="pt-3 border-t border-slate-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-slate-900">
-                      Chiến lược Đối chiếu khi không có Catalog (Strategy Pattern):
-                    </span>
-                    <span className="font-mono text-[10px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                      RQ2 Engine
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {[
-                      {
-                        id: "BIPARTITE",
-                        name: "Bipartite Graph",
-                        desc: "Ghép cặp tham lam theo điểm (1–1)",
-                      },
-                      {
-                        id: "CLUSTERING",
-                        name: "Agglomerative Clustering",
-                        desc: "Gom cụm tự động liên kết đa nguồn",
-                      },
-                      {
-                        id: "MASTER_SOURCE",
-                        name: "Master Source",
-                        desc: "Chỉ định 1 tệp đơn hàng làm chuẩn",
-                      },
-                    ].map((strat) => (
-                      <button
-                        key={strat.id}
-                        type="button"
-                        onClick={() => setSelectedStrategy(strat.id)}
-                        className={`p-2.5 rounded-lg text-left border text-xs transition cursor-pointer ${
-                          selectedStrategy === strat.id
-                            ? "bg-indigo-600 text-white border-indigo-600 font-bold shadow-xs"
-                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="font-semibold">{strat.name}</div>
-                        <div
-                          className={`text-[10.5px] mt-0.5 ${
-                            selectedStrategy === strat.id ? "text-indigo-100" : "text-slate-400"
-                          }`}
-                        >
-                          {strat.desc}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {selectedStrategy === "MASTER_SOURCE" && orderFiles.length > 0 && (
-                    <div className="mt-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                        Tệp nguồn chuẩn:
-                      </span>
-                      <select
-                        value={masterSourceIndex}
-                        onChange={(e) => setMasterSourceIndex(Number(e.target.value))}
-                        className="text-xs p-1.5 rounded border border-slate-300 bg-white font-medium flex-1 outline-none focus:border-indigo-500"
-                      >
-                        {orderFiles.map((f, fIdx) => (
-                          <option key={fIdx} value={fIdx}>
-                            {f.fileName || `Tệp ${fIdx + 1}`}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
+          <section aria-labelledby="strategy-title" className="space-y-2">
+            <h3 id="strategy-title" className="text-xs font-bold text-slate-800">Chiến lược khi không có danh mục chuẩn</h3>
+            {hasCatalog ? <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg p-3">Đã nạp danh mục: sử dụng đối chiếu 3 tầng Mã → Crosswalk → Tên. Các lựa chọn bên dưới chỉ có hiệu lực khi bỏ danh mục.</p>
+              : <p className="text-xs text-slate-500">Chọn cách đối chiếu giữa các tệp đơn hàng. Gói nghiệp vụ chỉ điều chỉnh ngưỡng, không tự đổi chiến lược.</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2" role="group" aria-labelledby="strategy-title">
+              {Object.entries(STRATEGY_LABELS).map(([id, label]) => (
+                <button key={id} type="button" disabled={hasCatalog} aria-pressed={draft.selectedStrategy === id}
+                  onClick={() => setDraft(previous => ({ ...previous, selectedStrategy: id }))}
+                  className={['p-3 rounded-lg text-left border text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed', draft.selectedStrategy === id ? 'bg-indigo-50 text-indigo-800 border-indigo-500' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'].join(' ')}>{label}</button>
+              ))}
+            </div>
+            {!hasCatalog && draft.selectedStrategy === 'MASTER_SOURCE' && (orderFiles.length > 0 ? (
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center pt-2">
+                <label htmlFor="master-source" className="text-xs font-semibold text-slate-700">Tệp nguồn chuẩn:</label>
+                <select id="master-source" value={draft.masterSourceIndex} onChange={event => setDraft(previous => ({ ...previous, masterSourceIndex: Number(event.target.value) }))}
+                  className="min-w-0 flex-1 text-xs p-2 border border-slate-300 rounded-lg bg-white">
+                  {orderFiles.map((file, index) => <option key={index} value={index}>{file.fileName}</option>)}
+                </select>
               </div>
-            )}
-          </div>
+            ) : <p className="text-xs text-amber-700">Sau khi nạp đơn hàng, mở lại cấu hình để chọn tệp nguồn chuẩn.</p>)}
+          </section>
+          {validationError && <p role="alert" className="text-xs text-rose-800 bg-rose-50 border border-rose-200 p-3 rounded-lg">{validationError}</p>}
+          {isResults && <div className="text-xs p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900">
+            <p>Áp dụng sẽ chạy lại dữ liệu. Đóng hoặc Hủy giữ nguyên kết quả hiện tại.</p>
+            {needsResetAcknowledgement && <label className="flex items-start gap-2 mt-2 cursor-pointer">
+              <input type="checkbox" checked={acknowledgedReset} onChange={event => setAcknowledgedReset(event.target.checked)} className="mt-0.5 accent-indigo-600" />
+              <span>Tôi đồng ý xóa {manualDecisionCount} quyết định HITL của lần chạy hiện tại để duyệt lại.</span>
+            </label>}
+          </div>}
         </div>
 
-        {/* Modal Footer */}
-        <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition cursor-pointer"
-          >
-            Đóng
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition shadow-sm shadow-indigo-200 cursor-pointer"
-          >
-            <Check size={14} />
-            <span>Áp dụng cấu hình</span>
+        <div className="p-4 sm:px-6 border-t border-slate-200 flex flex-wrap justify-end gap-2 shrink-0">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">Hủy</button>
+          <button type="button" disabled={!canApply} onClick={() => { if (canApply) onApply(draft); }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:bg-slate-200 disabled:text-slate-500 disabled:cursor-not-allowed">
+            <Check size={14} />{isResults ? 'Áp dụng và chạy lại' : 'Áp dụng cấu hình'}
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
+  return typeof document === 'undefined' ? modal : createPortal(modal, document.body);
 }

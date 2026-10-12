@@ -1,21 +1,14 @@
 import React from "react";
-import {
-  FileText,
-  BarChart3,
-  GitMerge,
-  ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
-  Layers,
-  ArrowRight,
-} from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
+import { linkingSummary } from "../../logic/uiPresentation";
 import { AcademicBadge } from "../common/Badge";
 import { formatVND } from "../dashboard/MetricStatCards";
 
-export function ScientificReportTab({ result, config, liveMatchRate }) {
+export function ScientificReportTab({ result }) {
   const norm = result.normStats || {};
   const res = result.resolutionStats || null;
   const gov = result.governanceAudit || {};
+  const links = linkingSummary(result);
 
   return (
     <div className="space-y-6">
@@ -23,7 +16,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+            <div className="w-8 h-8 shrink-0 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
               01
             </div>
             <div>
@@ -93,19 +86,19 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
+            <div className="w-8 h-8 shrink-0 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
               02
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                Đánh Giá Thực Nghiệm Đối Chiếu Thực Thể (Entity Resolution Benchmark)
+                Thống kê liên kết thực thể
               </h3>
               <p className="text-xs text-slate-500">
-                So sánh hiệu quả phương pháp Multi-tier Matching (3 tầng) so với Exact Matching đơn thuần
+                {res ? "Đối chiếu 3 tầng so với chỉ ghép mã chính xác, trước duyệt HITL" : result.strategyLabel}
               </p>
             </div>
           </div>
-          <AcademicBadge code="RQ2" label="Multi-tier vs Exact" />
+          <AcademicBadge code="RQ2" label={res ? "Multi-tier vs Exact" : "Liên kết đa nguồn"} />
         </div>
         <p className="text-xs text-slate-500 mb-3">Tỷ lệ liên kết tự động trước duyệt; không tính ứng viên đang chờ. Precision, recall và F1 cần tập dữ liệu có Ground Truth. Kết quả duyệt tay được phản ánh ở KPI và bảng dữ liệu.</p>
         <p className="text-xs text-slate-500 mb-3">Liên kết tới bản ghi danh mục không tự chứng minh đúng mọi ấn bản/kiểu bìa. Giữ biến thể nguồn; Combo chưa rõ thành phần không tự tách hoặc ghép thành sách lẻ.</p>
@@ -120,17 +113,17 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
               {res ? `${res.exactMatchRate}%` : "—"}
             </div>
             <span className="text-[11px] text-slate-400 mt-1 block">
-                {res ? `${res.exactOnlyMatchesCount}/${result.stats.totalRows} dòng được liên kết` : "Không có catalog đối chiếu"}
+                {res ? `${res.exactOnlyMatchesCount}/${result.stats.totalRows} dòng được liên kết` : "Chưa có phép so sánh chỉ ghép mã"}
             </span>
           </div>
 
           {/* Card 2: Multi-tier Engine */}
           <div className="p-4 rounded-xl border border-indigo-200 bg-indigo-50/40 text-center">
             <span className="text-[11px] uppercase font-bold text-indigo-800 block mb-1">
-              Multi-tier tự động trước duyệt
+              {res ? "Multi-tier tự động trước duyệt" : "Liên kết tự động trước duyệt"}
             </span>
             <div className="text-3xl font-black font-mono text-indigo-700 mt-2">
-              {res ? `${res.multiTierMatchRate}%` : `${liveMatchRate}%`}
+              {res ? `${res.multiTierMatchRate}%` : `${links.automaticRate}%`}
             </div>
             <span className="text-[11px] text-indigo-600 mt-1 block font-medium">
               {res ? "Tầng 1 (Mã) + Tầng 2 (Crosswalk) + Tầng 3 (Fuzzy)" : (result.strategyLabel || "Tự động phân giải thực thể")}
@@ -146,34 +139,39 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
               {res ? `${res.improvementRate} điểm %` : "Chưa có baseline"}
             </div>
             <span className="text-[11px] text-emerald-700 mt-1 block font-medium">
-              Nhận diện biến thể tên, thiếu dấu, sai mã SKU
+              {res ? "Chênh lệch tỷ lệ liên kết; chưa phải cải thiện độ chính xác" : "Cần cùng tập đối chiếu để so sánh phương pháp"}
             </span>
           </div>
         </div>
 
+        <div className="text-xs p-3 mb-4 rounded-lg bg-blue-50 border border-blue-100 space-y-1" aria-label="Liên kết trước và sau duyệt">
+          <p>Tự động trước duyệt: <strong>{links.automatic}/{links.total} dòng ({links.automaticRate}%)</strong>.</p>
+          <p>Được chấp thuận qua HITL: <strong>{links.confirmed} dòng</strong>.</p>
+          <p>Liên kết hiện tại, sau duyệt: <strong>{links.linked}/{links.total} dòng ({links.linkedRate}%)</strong>. Không dùng tỷ lệ này thay cho kết quả tự động.</p>
+        </div>
         {res?.breakdown && (
           <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-2">
             <div className="font-semibold text-slate-800 mb-1">
               Phân rã số liệu các tầng đối chiếu thực thể:
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-indigo-100 text-indigo-800">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+              <span className="shrink-0 w-fit px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-indigo-100 text-indigo-800">
                 Tầng 1 (Exact ID):
               </span>
               <span><strong>{res.breakdown.tier1_exact}</strong> dòng khớp chính xác theo mã SKU/Barcode và điều kiện biến thể.</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-blue-100 text-blue-800">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+              <span className="shrink-0 w-fit px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-blue-100 text-blue-800">
                 Tầng 2 (Crosswalk):
               </span>
               <span><strong>{res.breakdown.tier2_crosswalk}</strong> dòng khớp qua bảng tra cứu mã tương đương nội bộ.</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-teal-100 text-teal-800">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-2">
+              <span className="shrink-0 w-fit px-2 py-0.5 rounded font-mono font-bold text-[10.5px] bg-teal-100 text-teal-800">
                 Tầng 3 (Fuzzy Token):
               </span>
               <span>
-                <strong>{res.breakdown.tier3_fuzzy_high}</strong> tự động ghép chắc chắn +{" "}
+                <strong>{res.breakdown.tier3_fuzzy_high}</strong> tự động ghép theo ngưỡng +{" "}
                 <strong>{res.breakdown.tier3_fuzzy_confirm}</strong> chuyển phân hệ xác nhận có giám sát (HITL).
               </span>
             </div>
@@ -185,7 +183,7 @@ export function ScientificReportTab({ result, config, liveMatchRate }) {
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-xs">
+            <div className="w-8 h-8 shrink-0 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-xs">
               03
             </div>
             <div>

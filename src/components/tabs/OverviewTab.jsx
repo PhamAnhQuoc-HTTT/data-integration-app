@@ -11,16 +11,17 @@ import {
   Legend,
 } from "recharts";
 import { TrendingUp, ShoppingBag } from "lucide-react";
+import { compactVND } from "../../logic/uiPresentation";
 import { formatVND } from "../dashboard/MetricStatCards";
 
-export function OverviewTab({ revenueByChannel, topProducts }) {
+export function OverviewTab({ revenueByChannel = [], topProducts = [] }) {
   const PALETTE = ["#4F46E5", "#059669", "#D97706", "#2563EB", "#7C3AED", "#E11D48"];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
       {/* Doanh thu theo kênh */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs min-w-0">
+        <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <TrendingUp size={15} />
@@ -32,7 +33,7 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
           <span className="text-[11px] font-mono text-slate-400">Theo điều kiện ghi nhận</span>
         </div>
 
-        <ResponsiveContainer width="100%" height={280}>
+        {revenueByChannel.length === 0 ? <p className="py-16 text-center text-sm text-slate-500" role="status">Chưa có giao dịch đủ điều kiện để hiển thị giá trị bán theo kênh.</p> : <ResponsiveContainer width="100%" height={280}>
           <BarChart data={revenueByChannel} margin={{ left: 0, right: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
             <XAxis
@@ -45,12 +46,15 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
               tick={{ fontSize: 11, fill: "#64748B" }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `${(v / 1000000).toFixed(1)}Tr`}
+              tickFormatter={compactVND}
             />
             <Tooltip
               formatter={(v) => [formatVND(v), "Giá trị bán đủ điều kiện"]}
               contentStyle={{
                 fontSize: 12,
+                maxWidth: "min(280px, 75vw)",
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
                 borderRadius: 8,
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
@@ -67,24 +71,24 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
               ))}
             </Bar>
           </BarChart>
-        </ResponsiveContainer>
+        </ResponsiveContainer>}
       </div>
 
       {/* Top sản phẩm bán chạy */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs min-w-0">
+        <div className="flex items-start justify-between flex-wrap gap-2 mb-4">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <ShoppingBag size={15} />
             </div>
             <h3 className="text-sm font-bold text-slate-900">
-              Top Sản Phẩm Bán Chạy Nhất (Đã Quy Chuẩn)
+              Sản phẩm bán nhiều — giao dịch đủ điều kiện
             </h3>
           </div>
           <span className="text-[11px] font-mono text-slate-400">Số lượng bán</span>
         </div>
 
-        <ResponsiveContainer width="100%" height={280}>
+        {topProducts.length === 0 ? <p className="py-16 text-center text-sm text-slate-500" role="status">Chưa có sản phẩm bán đủ điều kiện để xếp hạng.</p> : <ResponsiveContainer width="100%" height={Math.max(240, topProducts.length * 42)}>
           <BarChart data={topProducts} layout="vertical" margin={{ left: 10, right: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
             <XAxis
@@ -108,6 +112,9 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
               labelFormatter={(label) => `Sản phẩm: ${label}`}
               contentStyle={{
                 fontSize: 12,
+                maxWidth: "min(280px, 75vw)",
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
                 borderRadius: 8,
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
@@ -115,7 +122,8 @@ export function OverviewTab({ revenueByChannel, topProducts }) {
             />
             <Bar dataKey="soLuong" name="Số lượng" radius={[0, 6, 6, 0]} fill="#059669" />
           </BarChart>
-        </ResponsiveContainer>
+        </ResponsiveContainer>}
+        <p className="text-[11px] text-slate-500 mt-3">Nhóm theo thực thể đã liên kết; dòng chưa liên kết giữ riêng theo nguồn, không mặc định đã quy chuẩn. Tên đầy đủ hiển thị khi xem chi tiết biểu đồ.</p>
       </div>
     </div>
   );

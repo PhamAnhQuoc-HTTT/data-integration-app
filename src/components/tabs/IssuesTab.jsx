@@ -51,7 +51,7 @@ export function IssuesTab({
             Không phát hiện vấn đề dữ liệu nào!
           </h3>
           <p className="text-xs text-slate-500">
-            Dữ liệu tích hợp từ tất cả các nguồn hoàn toàn sạch, chuẩn hóa và nhất quán.
+            Chưa phát hiện vấn đề theo các quy tắc hiện có; không thay thế việc đối soát dữ liệu nguồn.
           </p>
         </div>
       ) : (
@@ -119,7 +119,7 @@ export function IssuesTab({
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs table-fixed border-collapse">
+            <table className="w-full min-w-[900px] text-left text-xs table-fixed border-collapse">
               <thead>
                 <tr className="bg-slate-50 text-slate-600 uppercase text-[10.5px] tracking-wider font-bold border-b border-slate-200">
                   <th className="p-3 w-[4%] text-center">STT</th>
@@ -170,14 +170,14 @@ export function IssuesTab({
                         </div>
                       </td>
                       <td className="p-3 align-top pt-2.5">
-                        <div className="space-y-1.5 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200">
+                        <div className="grid grid-cols-[max-content_minmax(0,1fr)] items-start gap-x-2.5 gap-y-2.5 bg-slate-50/80 p-3 rounded-lg border border-slate-200">
                           {r.issues.map((iss, issIdx) => (
-                            <div key={issIdx} className="flex items-start gap-2">
-                              <SeverityBadge severity={iss.severity} />
-                              <span className="text-[11.5px] text-slate-700 mt-0.5">
+                            <React.Fragment key={issIdx}>
+                              <SeverityBadge severity={iss.severity} className="w-full justify-center" />
+                              <span className="min-w-0 [overflow-wrap:anywhere] text-xs leading-5 text-slate-700 py-0.5">
                                 {iss.detail}
                               </span>
-                            </div>
+                            </React.Fragment>
                           ))}
                         </div>
                       </td>

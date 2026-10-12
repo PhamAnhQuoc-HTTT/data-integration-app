@@ -3,8 +3,6 @@ import {
   SlidersHorizontal,
   Download,
   RotateCcw,
-  Sparkles,
-  Database,
   GraduationCap,
   Layers,
   FileSpreadsheet,
@@ -22,24 +20,24 @@ export function Header({
     <header className="border-b border-slate-200 bg-white/90 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4 flex-wrap">
         {/* Brand & Academic Info */}
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3.5 min-w-0 max-w-full">
           <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm shadow-indigo-200 flex-shrink-0">
             <Layers size={22} className="stroke-[2.2]" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                <GraduationCap size={12} />
+                <GraduationCap size={12} className="shrink-0" />
                 KLTN · ĐH Công Nghệ Thông Tin (UIT — ĐHQG-HCM)
               </span>
-              <span className="text-[11px] font-medium text-slate-400 font-mono hidden sm:inline">
+              <span className="text-[11px] font-medium text-slate-400 font-mono">
                 HTTT · 2026
               </span>
             </div>
             <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-tight mt-0.5">
-              Hệ Thống Tích Hợp & Quản Trị Chất Lượng Dữ Liệu Bán Hàng Đa Kênh
+              Hệ Thống Tích Hợp & Quản Trị Chất Lượng Dữ Liệu Bán Hàng Đa Nguồn
             </h1>
-            <p className="text-[11.5px] text-slate-500 font-mono hidden md:block">
+            <p className="text-[11.5px] text-slate-500 font-mono hidden md:block break-words">
               Multi-source Sales Data Integration and Data Quality Management System
             </p>
           </div>
@@ -51,17 +49,22 @@ export function Header({
             <button
               type="button"
               onClick={onOpenConfig}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-lg transition shadow-2xs cursor-pointer"
+              disabled={step === "processing"}
+              aria-haspopup="dialog"
+              aria-label={"Gói cấu hình: " + activePreset}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-lg transition shadow-2xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <SlidersHorizontal size={14} className="text-slate-500" />
               <span>Gói cấu hình:</span>
               <span className="font-bold text-indigo-600">{activePreset}</span>
             </button>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <button
                 type="button"
                 onClick={onOpenConfig}
+                aria-label="Cấu hình và chạy lại"
+                aria-haspopup="dialog"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-300 rounded-lg transition shadow-2xs cursor-pointer"
               >
                 <SlidersHorizontal size={13} className="text-slate-500" />
@@ -83,11 +86,13 @@ export function Header({
                 title="Tải bảng tính Excel chuẩn (.xlsx)"
               >
                 <FileSpreadsheet size={14} />
-                <span>Xuất Excel (.xlsx)</span>
+                <span>Xuất Excel<span className="hidden sm:inline"> (.xlsx)</span></span>
               </button>
               <button
                 type="button"
                 onClick={onReset}
+                aria-label="Đổi file — xác nhận xóa kết quả hiện tại"
+                aria-haspopup="dialog"
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition shadow-2xs cursor-pointer"
                 title="Tải lại file khác"
               >

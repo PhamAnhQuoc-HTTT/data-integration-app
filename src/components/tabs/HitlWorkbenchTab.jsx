@@ -7,7 +7,7 @@ import { getReviewCandidate, reconciliationCounts } from "../../logic/reconcilia
 function SourceRecord({ item }) {
   const original = item.original || item;
   return (
-    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+    <div className="min-w-0 [overflow-wrap:anywhere] p-3 rounded-lg bg-slate-50 border border-slate-200">
       <p className="text-[11px] text-slate-500 mb-1">Dữ liệu nguồn · Đơn: {item.ma_don || "—"} · {item.nguon}</p>
       <p className="font-semibold text-xs text-slate-900">{original.__raw_ten_sp || original.ten_sp || "(Chưa có tên)"}</p>
       <p className="text-[11px] font-mono text-slate-500 mt-1">Mã nguồn: {original.__raw_ma_dinh_danh || original.ma_dinh_danh || "—"}</p>
@@ -26,6 +26,7 @@ export function HitlWorkbenchTab({ pendingConfirmations, manualConfirmations, on
         <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2"><Sparkles size={17} />Đối soát liên kết sách</h3>
         <p className="text-xs text-amber-900 mt-2">Có {counts.pending} dòng cần duyệt, {counts.reviewed} dòng đã duyệt và {counts.unlinked} dòng chưa có liên kết. Số đếm theo dòng dữ liệu, không phải số đầu sách.</p>
         <p className="text-xs text-slate-600 mt-1">Chỉ đề xuất ghép chưa chắc chắn mới cần chấp thuận hoặc từ chối. Ngưỡng lần chạy: {config.fuzzyConfirmThreshold}% – {config.fuzzyHighThreshold}%. Điểm cao vẫn cần duyệt nếu có ứng viên cạnh tranh chênh không quá 5 điểm.</p>
+        <p className="text-xs text-slate-600 mt-1">Điểm tương đồng văn bản không phải độ chính xác liên kết. Màu thể hiện trạng thái chờ duyệt, đã chấp thuận hoặc đã từ chối.</p>
       </div>
 
       <section className="space-y-3" aria-label="Đề xuất cần xác nhận">
@@ -37,13 +38,13 @@ export function HitlWorkbenchTab({ pendingConfirmations, manualConfirmations, on
           const price = normalizeNumber(candidate.gia_chuan);
           return (
             <div key={item.rowIndex} className="bg-white border border-amber-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                {Number.isFinite(item.matchScore) && item.matchScore > 0 && <MatchScoreBadge score={item.matchScore} />}
+              <div className="flex flex-wrap items-center gap-2">
+                {Number.isFinite(item.matchScore) && item.matchScore > 0 && <MatchScoreBadge score={item.matchScore} status={item.matchStatus} />}
                 <SeverityBadge severity={item.matchStatus} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <SourceRecord item={item} />
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <div className="min-w-0 [overflow-wrap:anywhere] p-3 rounded-lg bg-amber-50 border border-amber-200">
                   <p className="text-[11px] text-slate-500 mb-1">Đề xuất liên kết</p>
                   <p className="font-semibold text-xs">{candidate.ten_sp}</p>
                   <p className="text-[11px] font-mono mt-1">Mã đề xuất: {candidate.ma_dinh_danh || "—"}</p>

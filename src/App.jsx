@@ -1,9 +1,8 @@
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import {
   ArrowRight,
   AlertTriangle,
-  RotateCcw,
   BarChart3,
   ListChecks,
   Sparkles,
@@ -11,14 +10,13 @@ import {
   Table2,
   SlidersHorizontal,
   CheckCircle2,
-  Layers,
-  ShieldAlert,
 } from "lucide-react";
 import { detectFields } from "./logic/fieldMapping";
 import { runPipeline, applyManualDecisions } from "./logic/pipeline";
 import { parseCrosswalk } from './logic/crosswalk';
 import { reconciliationCounts } from './logic/reconciliation';
 import { getExportData, csvCell } from "./logic/exportData";
+import { STRATEGY_LABELS, sourceIndexAfterRemoval, validateUiConfig } from "./logic/uiConfig";
 
 // Components
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
@@ -26,7 +24,9 @@ import { Header } from "./components/layout/Header";
 import { PipelineProgress } from "./components/layout/PipelineProgress";
 import { OrdersDropzone } from "./components/upload/OrdersDropzone";
 import { CatalogDropzone } from "./components/upload/CatalogDropzone";
-import { PRESETS, PresetSelector } from "./components/upload/PresetSelector";
+import { PRESETS } from "./components/upload/PresetSelector";
+import { InventoryTab } from "./components/tabs/InventoryTab";
+import { ResetConfirmModal } from "./components/modals/ResetConfirmModal";
 import { AdvancedConfigModal } from "./components/modals/AdvancedConfigModal";
 import { MetricStatCards } from "./components/dashboard/MetricStatCards";
 import { OverviewTab } from "./components/tabs/OverviewTab";
@@ -43,12 +43,17 @@ export default function App() {
   const [orderFiles, setOrderFiles] = useState([]);
   const [catalogFile, setCatalogFile] = useState(null);
   const [crosswalk, setCrosswalk] = useState([]);
+  const [crosswalkFileName, setCrosswalkFileName] = useState("");
+  const [pendingUploads, setPendingUploads] = useState(0);
   const [dragOverKey, setDragOverKey] = useState(null);
-  const [procIdx, setProcIdx] = useState(0);
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [parseError, setParseError] = useState("");
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState("");
+  const orderUploadBusy = useRef(false);
+  const closeReset = useCallback(() => setShowResetModal(false), []);
 
   // Manual Confirmations (HITL)
   const [manualConfirmations, setManualConfirmations] = useState(new Map());
@@ -64,19 +69,19 @@ export default function App() {
   const [activePresetId, setActivePresetId] = useState("balanced");
   const [config, setConfig] = useState({ ...PRESETS.balanced.config });
 
-  const handleSelectPreset = (presetKey) => {
-    setActivePresetId(presetKey);
-    setConfig({ ...PRESETS[presetKey].config });
-  };
-
-  const handleCustomParamChange = (field, value) => {
-    setActivePresetId("custom");
-    setConfig((prev) => ({ ...prev, [field]: value }));
-  };
+  const closeConfig = useCallback(() => setShowConfigModal(false), []);
+  const currentConfig = { activePresetId, config, selectedStrategy, masterSourceIndex };
+  const configurationError = validateUiConfig(currentConfig, {
+    hasCatalog: !!catalogFile, orderFiles, crosswalkCount: crosswalk.length,
+  });
 
   const parseToFileState = async (file) => {
     const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    if (!/\.(csv|xlsx|xls)$/i.test(file.name)) throw new Error("Định dạng tệp không hỗ trợ.");
+    const isCsv = /\.csv$/i.test(file.name);
+    const wb = isCsv
+      ? XLSX.read(new TextDecoder("utf-8", { fatal: true }).decode(buf), { type: "string", raw: true, cellDates: true })
+      : XLSX.read(buf, { type: "array", cellDates: true });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
     const headers = (rows[0] || []).map((h) => String(h));
@@ -97,18 +102,45 @@ export default function App() {
     return "";
   };
 
-  const addOrderFile = async (file) => {
+  const addOrderFiles = async (files) => {
+    if (!files.length) return;
+    if (orderUploadBusy.current || pendingUploads > 0) {
+      setUploadNotice("Đang đọc tệp. Vui lòng chờ rồi chọn lại các tệp bổ sung.");
+      return;
+    }
+    orderUploadBusy.current = true;
     setParseError("");
+    setPendingUploads(count => count + 1);
+    const parsed = [], feedback = [];
+    const names = new Set(orderFiles.map(file => file.fileName.normalize('NFC').toLowerCase()));
     try {
-      const fs = await parseToFileState(file);
-      fs.channelLabel = detectChannelFromFilename(file.name);
-      setOrderFiles((prev) => (prev.length >= MAX_ORDER_FILES ? prev : [...prev, fs]));
-    } catch {
-      setParseError(`Không đọc được file "${file.name}". Hãy kiểm tra định dạng (.csv/.xlsx/.xls).`);
+      // Sequential parsing preserves the user's source order, including Master Source.
+      for (const file of files) {
+        const name = file.name.normalize('NFC').toLowerCase();
+        if (names.has(name)) { feedback.push('Bỏ qua tệp trùng tên: ' + file.name); continue; }
+        if (orderFiles.length + parsed.length >= MAX_ORDER_FILES) {
+          feedback.push('Chưa nạp do giới hạn ' + MAX_ORDER_FILES + ' tệp: ' + file.name); continue;
+        }
+        try {
+          const fs = await parseToFileState(file);
+          fs.channelLabel = detectChannelFromFilename(file.name);
+          parsed.push(fs); names.add(name);
+        } catch {
+          feedback.push('Không đọc được: ' + file.name + ' (.xlsx/.xls hoặc CSV UTF-8).');
+        }
+      }
+      setOrderFiles(previous => [...previous, ...parsed]);
+      setUploadNotice('Đã nạp thêm ' + parsed.length + ' tệp.' + (feedback.length ? ' ' + feedback.join(' · ') : ''));
+    } finally {
+      orderUploadBusy.current = false;
+      setPendingUploads(count => count - 1);
     }
   };
 
-  const removeOrderFile = (idx) => setOrderFiles((prev) => prev.filter((_, i) => i !== idx));
+  const removeOrderFile = (idx) => {
+    setOrderFiles((prev) => prev.filter((_, i) => i !== idx));
+    setMasterSourceIndex(previous => sourceIndexAfterRemoval(previous, idx));
+  };
 
   const updateChannelLabel = (idx, label) => {
     setOrderFiles((prev) => prev.map((f, i) => (i === idx ? { ...f, channelLabel: label } : f)));
@@ -116,56 +148,51 @@ export default function App() {
 
   const setCatalog = async (file) => {
     setParseError("");
+    setPendingUploads(count => count + 1);
     try {
       setCatalogFile(await parseToFileState(file));
     } catch {
       setParseError(`Không đọc được file "${file.name}". Hãy kiểm tra định dạng (.csv/.xlsx/.xls).`);
-    }
+    } finally { setPendingUploads(count => count - 1); }
   };
 
   const reset = () => {
     setOrderFiles([]);
     setCatalogFile(null);
     setCrosswalk([]);
+    setCrosswalkFileName("");
+    setMasterSourceIndex(0);
     setResult(null);
     setStep("upload");
     setActiveTab("overview");
     setParseError("");
     setManualConfirmations(new Map());
     setIssueGroupFilter("ALL");
+    setUploadNotice("");
+    setShowResetModal(false);
   };
 
-  const reRunConfig = () => {
-    setResult(null);
-    setStep("upload");
-    setActiveTab("overview");
+  const requestReset = () => { if (result) setShowResetModal(true); else reset(); };
+  const reRunConfig = () => setShowConfigModal(true);
+
+  const readyToProcess = pendingUploads === 0 && !configurationError
+    && orderFiles.length > 0 && orderFiles.every((f) => f.dataRows.length > 0)
+    && (!catalogFile || catalogFile.dataRows.length > 0);
+
+  const processAll = async (selection = currentConfig) => {
+    const error = validateUiConfig(selection, { hasCatalog: !!catalogFile, orderFiles, crosswalkCount: crosswalk.length });
+    if (error) { setParseError(error); return; }
     setParseError("");
-    setManualConfirmations(new Map());
-    setIssueGroupFilter("ALL");
-    setShowConfigModal(true);
-  };
-
-  const readyToProcess = orderFiles.length > 0 && orderFiles.every((f) => f.dataRows.length > 0);
-
-  const processAll = async () => {
-    setResult(null);
-    setManualConfirmations(new Map());
-    setActiveTab('overview');
-    setIssueGroupFilter('ALL');
     setStep("processing");
-    setProcIdx(0);
-    await delay(350);
-    setProcIdx(1);
-    await delay(450);
-    setProcIdx(2);
-    await delay(450);
+    // Let the browser paint once; do not display invented per-stage progress.
+    await delay(0);
 
     const pipelineOptions = {
-      resolutionStrategy: catalogFile ? "CATALOG" : selectedStrategy,
-      masterSourceIndex,
-      fuzzyHighThreshold: config.fuzzyHighThreshold,
-      fuzzyConfirmThreshold: config.fuzzyConfirmThreshold,
-      priceDeviationThreshold: config.priceDeviationThreshold,
+      resolutionStrategy: catalogFile ? "CATALOG" : selection.selectedStrategy,
+      masterSourceIndex: selection.masterSourceIndex,
+      fuzzyHighThreshold: selection.config.fuzzyHighThreshold,
+      fuzzyConfirmThreshold: selection.config.fuzzyConfirmThreshold,
+      priceDeviationThreshold: selection.config.priceDeviationThreshold,
       crosswalk,
     };
 
@@ -174,16 +201,33 @@ export default function App() {
       setManualConfirmations(new Map());
       setResult({
         ...pipelineResult,
-        activePreset: activePresetId !== "custom" ? PRESETS[activePresetId].name : "Tùy chỉnh riêng",
+        activePreset: selection.activePresetId !== "custom" ? PRESETS[selection.activePresetId].name : "Tùy chỉnh riêng",
         fileBreakdown: orderFiles.map(f => `${f.fileName} (${f.dataRows.length})`).join(" · "),
       });
     } catch (error) {
       setParseError(error.message || "Không thể xử lý dữ liệu.");
-      setStep("upload");
+      setStep(result ? "results" : "upload");
       return;
     }
 
+    setActiveTab("overview");
+    setIssueGroupFilter("ALL");
     setStep("results");
+    return true;
+  };
+
+  const applyConfig = async (draft) => {
+    if (validateUiConfig(draft, { hasCatalog: !!catalogFile, orderFiles, crosswalkCount: crosswalk.length })) return;
+    closeConfig();
+    if (step === "results") {
+      // Commit only after success so a failed rerun keeps both the previous result and config.
+      const succeeded = await processAll(draft);
+      if (!succeeded) return;
+    }
+    setActivePresetId(draft.activePresetId);
+    setConfig({ ...draft.config });
+    setSelectedStrategy(draft.selectedStrategy);
+    setMasterSourceIndex(draft.masterSourceIndex);
   };
 
   const handleManualDecision = (rowIndex, decision, item) => {
@@ -255,7 +299,7 @@ export default function App() {
   const unreviewedConfirmationsCount = reviewCounts.pending;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col" inert={showConfigModal || showResetModal ? true : undefined}>
       {/* Header Navigation */}
       <Header
         step={step}
@@ -267,53 +311,26 @@ export default function App() {
         onOpenConfig={() => setShowConfigModal(true)}
         onExportCsv={exportSummaryCsv}
         onExportExcel={exportSummaryExcel}
-        onReset={reset}
+        onReset={requestReset}
       />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {parseError && (
+          <div role="alert" className="mb-5 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-3 text-rose-800 text-xs">
+            <AlertTriangle size={18} className="shrink-0" />
+            <div><strong>Không thể hoàn tất thao tác: </strong>{parseError}{result && <p className="mt-1">Kết quả và quyết định duyệt của lần chạy trước vẫn được giữ nguyên.</p>}</div>
+          </div>
+        )}
         {/* ============================== SCREEN 1: UPLOAD ============================== */}
         {step === "upload" && (
           <div className="space-y-6">
-            {/* Quick Introduction Banner */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <Layers size={17} className="text-indigo-600" />
-                    Không Gian Tải Dữ Liệu & Khởi Chạy Tích Hợp
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Hỗ trợ đồng bộ đa kênh (Shopee, TikTok Shop, POS, Lazada) và đối soát danh mục chuẩn
-                  </p>
-                </div>
-              </div>
-
-              {/* Quick Preset Selector */}
-              <div className="pt-2">
-                <PresetSelector
-                  activePresetId={activePresetId}
-                  onSelectPreset={handleSelectPreset}
-                />
-              </div>
-            </div>
-
-            {/* Error Banner */}
-            {parseError && (
-              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-3 text-rose-800 text-xs">
-                <AlertTriangle size={18} className="text-rose-600 flex-shrink-0" />
-                <div>
-                  <strong className="font-bold">Lỗi tệp dữ liệu: </strong>
-                  <span>{parseError}</span>
-                </div>
-              </div>
-            )}
-
             {/* Dual Dropzones */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <OrdersDropzone
                 files={orderFiles}
-                onAddFile={addOrderFile}
+                onAddFiles={addOrderFiles}
+                busy={pendingUploads > 0}
                 onRemoveFile={removeOrderFile}
                 onUpdateChannelLabel={updateChannelLabel}
                 maxFiles={MAX_ORDER_FILES}
@@ -325,6 +342,8 @@ export default function App() {
               <CatalogDropzone
                 fileState={catalogFile}
                 onFile={setCatalog}
+                busy={pendingUploads > 0}
+                onError={setParseError}
                 onRemove={() => setCatalogFile(null)}
                 dragKey="catalog"
                 dragOverKey={dragOverKey}
@@ -332,29 +351,43 @@ export default function App() {
               />
             </div>
 
+            {uploadNotice && <p role="status" className="text-xs text-slate-700 p-3 bg-blue-50 border border-blue-100 rounded-lg break-words">{uploadNotice}</p>}
             {/* Action Button & Status Help */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 text-xs space-y-2">
-              <label className="block font-semibold">Crosswalk mã sách (tùy chọn, dùng với Catalog hoặc Master Source)
-                <input type="file" accept=".csv,.xlsx,.xls" className="block mt-2" onChange={async e => {
+              <label className="block font-semibold rounded-lg focus-within:ring-2 focus-within:ring-indigo-500">Crosswalk mã sách (tùy chọn, dùng với danh mục hoặc nguồn chuẩn)
+                <span className="block mt-2"><span className="inline-flex px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 cursor-pointer">{crosswalkFileName ? 'Chọn tệp Crosswalk khác' : 'Chọn tệp Crosswalk'}</span></span>
+                <input type="file" accept=".csv,.xlsx,.xls" disabled={pendingUploads > 0} className="sr-only" onChange={async e => {
                   const f = e.target.files?.[0];
                   e.target.value = '';
                   if (!f) return;
+                  setPendingUploads(count => count + 1);
                   try {
                     const parsed = await parseToFileState(f);
                     setCrosswalk(parseCrosswalk(parsed.headers, parsed.dataRows));
+                    setCrosswalkFileName(f.name);
                     setParseError('');
                   } catch (error) { setParseError(error.message); }
+                  finally { setPendingUploads(count => count - 1); }
                 }} />
               </label>
               <p>Cột internal_code và standard_code; thêm source (tên tệp đơn hàng) nếu mã nội bộ khác nhau giữa các nguồn. Trong mỗi nguồn, một mã chỉ được trỏ đến một mã chuẩn đã có trong danh mục.</p>
-              {crosswalk.length > 0 && <p>Đã nạp {crosswalk.length} ánh xạ. <button type="button" onClick={() => setCrosswalk([])} className="text-rose-700 underline">Xóa Crosswalk</button></p>}
-              <p>Bảng ngang theo chi nhánh được giữ để đối soát, không tính doanh thu khi chưa xác định nghiệp vụ. Giá bìa không thay thế giá bán.</p>
-              <p>Shopee dùng giá ưu đãi theo đơn vị; Lazada/TikTok dùng tổng tiền sản phẩm sau giảm giá khi có cột này. Giá trị báo cáo chưa trừ phí sàn và phí vận chuyển. Trạng thái hoàn tiền được xét cùng trạng thái giao hàng.</p>
+              {crosswalkFileName && <p className="break-words text-indigo-700">Đã nạp: {crosswalkFileName} · {crosswalk.length} ánh xạ. <button type="button" disabled={pendingUploads > 0} onClick={() => { setCrosswalk([]); setCrosswalkFileName(''); }} className="text-rose-700 underline disabled:opacity-50 disabled:cursor-not-allowed">Xóa Crosswalk</button></p>}
+              {configurationError && <div role="alert" className="text-amber-800 bg-amber-50 rounded-lg p-3">
+                {configurationError} <button type="button" onClick={() => setShowConfigModal(true)} className="underline font-semibold">Mở cấu hình</button>
+              </div>}
+              <p className="text-slate-600">Giá bìa không thay thế giá bán. Giá trị báo cáo chưa trừ phí sàn và phí vận chuyển.</p>
+              <details className="text-slate-600">
+                <summary className="cursor-pointer font-semibold text-slate-700">Lưu ý về dữ liệu và cách tính</summary>
+                <div className="mt-2 space-y-2">
+                  <p>Bảng ngang theo chi nhánh được giữ để đối soát, không tính doanh thu khi chưa xác định nghiệp vụ.</p>
+                  <p>Shopee dùng giá ưu đãi theo đơn vị; Lazada/TikTok dùng tổng tiền sản phẩm sau giảm giá khi có cột này. Trạng thái hoàn tiền được xét cùng trạng thái giao hàng.</p>
+                </div>
+              </details>
             </div>
             <div className="pt-4 flex flex-col items-center gap-2.5">
               <button
                 type="button"
-                onClick={readyToProcess ? processAll : undefined}
+                onClick={() => { if (readyToProcess) processAll(); }}
                 disabled={!readyToProcess}
                 className={`inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold transition shadow-sm cursor-pointer ${
                   readyToProcess
@@ -367,15 +400,21 @@ export default function App() {
               </button>
 
               <div className="text-xs text-center text-slate-500">
-                {orderFiles.length === 0 && !catalogFile ? (
+                {pendingUploads > 0 ? (
+                  <span role="status">Đang đọc tệp, vui lòng chờ trước khi khởi chạy.</span>
+                ) : orderFiles.length === 0 && !catalogFile ? (
                   <span>Vui lòng tải lên ít nhất 1 tệp đơn hàng để kích hoạt xử lý.</span>
                 ) : orderFiles.length === 0 ? (
                   <span className="text-amber-600 font-medium">
                     ⚠️ Vui lòng tải thêm ít nhất 1 tệp đơn hàng.
                   </span>
+                ) : catalogFile && catalogFile.dataRows.length === 0 ? (
+                  <span className="text-amber-700">Danh mục đang rỗng. Hãy thay tệp hoặc bỏ danh mục.</span>
+                ) : orderFiles.some(file => file.dataRows.length === 0) ? (
+                  <span className="text-amber-700">Có tệp đơn hàng rỗng. Hãy thay hoặc xóa tệp đó.</span>
                 ) : !catalogFile ? (
                   <span className="text-slate-500">
-                    ℹ️ Chưa có catalog: Hệ thống sẽ tự động kích hoạt <strong>Strategy {selectedStrategy}</strong> để phân giải thực thể.
+                    Chưa có danh mục: dùng <strong>{STRATEGY_LABELS[selectedStrategy]}</strong>. Có thể đổi trong Gói cấu hình.
                   </span>
                 ) : (
                   <span className="text-emerald-700 font-semibold flex items-center gap-1 justify-center">
@@ -389,18 +428,18 @@ export default function App() {
         )}
 
         {/* ============================== SCREEN 2: PROCESSING ============================== */}
-        {step === "processing" && <PipelineProgress procIdx={procIdx} />}
+        {step === "processing" && <PipelineProgress />}
 
         {/* ============================== SCREEN 3: RESULTS ============================== */}
         {step === "results" && result && (
           <div className="space-y-6">
             {/* Status Summary Banner */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+              <div className="flex items-start gap-3 min-w-0 max-w-full">
+                <div className="w-9 h-9 shrink-0 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
                   <CheckCircle2 size={20} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-sm font-bold text-slate-900">
                       Tích Hợp Hoàn Tất: {result.stats.totalRows.toLocaleString()} dòng dữ liệu
@@ -412,7 +451,7 @@ export default function App() {
                       Gói: {result.activePreset}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5 break-words">
                     Nguồn nạp: {result.fileBreakdown}
                   </p>
                 </div>
@@ -459,6 +498,7 @@ export default function App() {
                   label: "Báo Cáo Học Thuật [RQ1-RQ2-RQ3]",
                   icon: FileText,
                 },
+                { key: "inventory", label: "Tồn kho master", icon: Table2 },
                 {
                   key: "master_data",
                   label: `Bảng Dữ Liệu Tích Hợp (${result.integrated.length})`,
@@ -473,7 +513,8 @@ export default function App() {
                     key={t.key}
                     type="button"
                     onClick={() => setActiveTab(t.key)}
-                    className={`inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold transition border-b-2 whitespace-nowrap cursor-pointer ${
+                    aria-pressed={isActive}
+                    className={`inline-flex shrink-0 items-center gap-2 px-4 py-2.5 text-xs font-bold transition border-b-2 whitespace-nowrap cursor-pointer ${
                       isActive
                         ? "border-indigo-600 text-indigo-600 bg-white"
                         : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
@@ -520,10 +561,10 @@ export default function App() {
                 />
               )}
 
+              {activeTab === "inventory" && <InventoryTab result={result} catalogFile={catalogFile} />}
               {activeTab === "master_data" && (
                 <MasterDataGridTab
                   integratedRows={result.integrated}
-                  manualConfirmations={manualConfirmations}
                   onExportCsv={exportSummaryCsv}
                   onExportExcel={exportSummaryExcel}
                 />
@@ -533,20 +574,21 @@ export default function App() {
         )}
       </main>
 
+      {showResetModal && <ResetConfirmModal onClose={closeReset} onConfirm={reset} decisionCount={manualConfirmations.size} />}
       {/* Advanced Configuration Modal */}
-      <AdvancedConfigModal
-        isOpen={showConfigModal}
-        onClose={() => setShowConfigModal(false)}
+      {showConfigModal && <AdvancedConfigModal
+        onClose={closeConfig}
+        onApply={applyConfig}
         activePresetId={activePresetId}
         config={config}
-        onSelectPreset={handleSelectPreset}
-        onCustomParamChange={handleCustomParamChange}
         selectedStrategy={selectedStrategy}
-        setSelectedStrategy={setSelectedStrategy}
         masterSourceIndex={masterSourceIndex}
-        setMasterSourceIndex={setMasterSourceIndex}
         orderFiles={orderFiles}
-      />
+        hasCatalog={!!catalogFile}
+        crosswalkCount={crosswalk.length}
+        isResults={step === "results"}
+        manualDecisionCount={manualConfirmations.size}
+      />}
     </div>
   );
 }

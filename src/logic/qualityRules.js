@@ -27,9 +27,9 @@ export const GROUP_LABELS = {
 };
 
 export const SEVERITY_LABELS = {
-  AUTO_FIXED: "✅ Đã tự sửa",
-  NEEDS_CONFIRMATION: "👆 Cần bạn xem",
-  FLAGGED_ONLY: "🔔 Đã gắn cờ",
+  AUTO_FIXED: "Đã tự sửa",
+  NEEDS_CONFIRMATION: "Cần bạn xem",
+  FLAGGED_ONLY: "Đã gắn cờ",
 };
 
 // ============================================================================

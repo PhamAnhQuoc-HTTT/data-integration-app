@@ -6,10 +6,10 @@ export const PRESETS = {
     id: "balanced",
     icon: Target,
     name: "Tiêu Chuẩn (Khuyên dùng)",
-    badge: "Cân bằng tối ưu",
+    badge: "Cân bằng",
     color: "indigo",
     shortDesc: "Cân bằng giữa độ chính xác và tính tự động cho bán lẻ đa kênh hàng ngày.",
-    detail: "Tự động chuẩn hóa biến thể tên thông thường (bỏ dấu, viết tắt). Chỉ yêu cầu xác nhận khi độ tương đồng nằm trong khoảng nghi ngờ (70% - 90%) và cảnh báo khi giá lệch > 30%.",
+    detail: "Duyệt ứng viên từ 70%; tự động ghép theo tên từ 90% nếu không xung đột và không có ứng viên cạnh tranh gần điểm. Cảnh báo lệch giá trên 30%.",
     suitableFor: "Doanh nghiệp bán lẻ đa kênh thông thường.",
     config: {
       fuzzyConfirmThreshold: 70,
@@ -23,10 +23,10 @@ export const PRESETS = {
     id: "strict",
     icon: Shield,
     name: "Nghiêm Ngặt (Kiểm toán / Tài chính)",
-    badge: "Chính xác cao",
+    badge: "Ngưỡng chặt hơn",
     color: "emerald",
-    shortDesc: "Ưu tiên tối đa độ chính xác tuyệt đối, thắt chặt ngưỡng kiểm duyệt sai lệch.",
-    detail: "Chỉ tự động ghép khi tên sản phẩm gần như giống hệt nhau (≥ 95%). Cảnh báo ngay khi giá bán chênh lệch trên 15% so với giá chuẩn để đảm bảo số liệu báo cáo tài chính tuyệt đối tin cậy.",
+    shortDesc: "Tăng ngưỡng tự động ghép và cảnh báo lệch giá sớm hơn để hỗ trợ đối soát.",
+    detail: "Duyệt ứng viên từ 85%; tự động ghép theo tên từ 95% khi đủ điều kiện. Cảnh báo lệch giá trên 15%; không bảo đảm độ chính xác nếu chưa đối chiếu Ground Truth.",
     suitableFor: "Đối soát kế toán, quyết toán tài chính, chốt công nợ.",
     config: {
       fuzzyConfirmThreshold: 85,
@@ -42,8 +42,8 @@ export const PRESETS = {
     name: "Tự Động Hóa Cao (TMĐT)",
     badge: "Nhanh & Tự động",
     color: "amber",
-    shortDesc: "Nới lỏng đối chiếu, giảm tối đa số dòng phải duyệt tay thủ công.",
-    detail: "Tự động chấp nhận các biến thể tên viết tắt, thiếu dấu hoặc có thêm phụ kiện (ngưỡng tương đồng nới lỏng xuống ≥ 80%), cho phép giá bán lệch đến 50% trước khi gắn cờ cảnh báo.",
+    shortDesc: "Dùng ngưỡng tự động ghép thấp hơn; vẫn kiểm tra các liên kết chưa chắc chắn.",
+    detail: "Duyệt ứng viên từ 55%; tự động ghép theo tên từ 80% khi đủ điều kiện. Cảnh báo lệch giá trên 50%. Vẫn kiểm tra xung đột ấn bản và combo.",
     suitableFor: "Báo cáo nhanh xu hướng thị trường, xử lý khối lượng lớn đơn hàng online.",
     config: {
       fuzzyConfirmThreshold: 55,
@@ -57,14 +57,17 @@ export const PRESETS = {
 
 export function PresetSelector({ activePresetId, onSelectPreset }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="group" aria-label="Chọn gói cấu hình nghiệp vụ">
       {Object.entries(PRESETS).map(([key, p]) => {
         const isSelected = activePresetId === key;
         const Icon = p.icon;
 
         return (
-          <div
+          <button
             key={key}
+            type="button"
+            aria-pressed={isSelected}
+            aria-label={p.name}
             onClick={() => onSelectPreset(key)}
             className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
               isSelected
@@ -72,17 +75,17 @@ export function PresetSelector({ activePresetId, onSelectPreset }) {
                 : "border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50/50"
             }`}
           >
-            <div>
-              <div className="flex items-center justify-between mb-2.5">
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+            <span className="block text-left">
+              <span className="flex items-center justify-between gap-2 mb-2.5">
+                <span
+                  className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${
                     isSelected
                       ? "bg-indigo-600 text-white"
                       : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   <Icon size={17} />
-                </div>
+                </span>
                 <span
                   className={`text-[11px] px-2 py-0.5 rounded font-semibold tracking-wide ${
                     isSelected
@@ -92,18 +95,19 @@ export function PresetSelector({ activePresetId, onSelectPreset }) {
                 >
                   {p.badge}
                 </span>
-              </div>
-              <h4 className="font-bold text-xs text-slate-900 mb-1">{p.name}</h4>
-              <p className="text-[11.5px] text-slate-500 leading-relaxed">{p.shortDesc}</p>
-            </div>
+              </span>
+              <span className="block font-bold text-xs text-slate-900 mb-1">{p.name}</span>
+              <span className="block text-[11.5px] text-slate-500 leading-relaxed">{p.shortDesc}</span>
+              <span className="block text-[10.5px] text-slate-600 mt-2">Duyệt từ {p.config.fuzzyConfirmThreshold}% · Tự động từ {p.config.fuzzyHighThreshold}% · Lệch giá &gt; {p.config.priceDeviationThreshold}%</span>
+            </span>
 
             {isSelected && (
-              <div className="mt-3 pt-2 border-t border-indigo-100 flex items-center gap-1.5 text-indigo-700 text-xs font-semibold">
+              <span className="mt-3 pt-2 border-t border-indigo-100 flex items-center gap-1.5 text-indigo-700 text-xs font-semibold">
                 <CheckCircle2 size={13} />
-                <span>Đang áp dụng</span>
-              </div>
+                <span>Đang chọn</span>
+              </span>
             )}
-          </div>
+          </button>
         );
       })}
     </div>

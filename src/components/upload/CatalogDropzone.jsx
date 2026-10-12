@@ -1,11 +1,14 @@
 import React, { useCallback } from "react";
-import { UploadCloud, CheckCircle2, Trash2, Package, HelpCircle } from "lucide-react";
+import { UploadCloud, CheckCircle2, Trash2, Package } from "lucide-react";
+import { MappingDetails } from "./MappingDetails";
 import { FIELD_LABELS } from "../../logic/fieldMapping";
 
 export function CatalogDropzone({
   fileState,
   onFile,
   onRemove,
+  busy = false,
+  onError,
   dragKey,
   dragOverKey,
   setDragOverKey,
@@ -16,10 +19,12 @@ export function CatalogDropzone({
     (e) => {
       e.preventDefault();
       setDragOverKey(null);
+      if (busy) return;
+      if (e.dataTransfer.files?.length > 1) { onError?.("Danh mục chỉ nhận một tệp. Vui lòng chọn lại một master."); return; }
       const f = e.dataTransfer.files?.[0];
       if (f) onFile(f);
     },
-    [onFile, setDragOverKey]
+    [onFile, setDragOverKey, busy, onError]
   );
 
   return (
@@ -29,12 +34,12 @@ export function CatalogDropzone({
           <Package size={20} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-slate-900 leading-tight">
               Danh Mục Sản Phẩm Gốc (Master Catalog)
             </h3>
             <span className="text-[11px] font-mono font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-              {fileState ? "Đã nạp chuẩn" : "Tùy chọn"}
+              {fileState ? "Đã đọc tệp" : "Tùy chọn"}
             </span>
           </div>
           <p className="text-[12px] text-slate-500 mt-0.5">
@@ -47,7 +52,7 @@ export function CatalogDropzone({
         <>
           <label
             htmlFor={inputId}
-            className={`border-2 border-dashed rounded-xl py-6 px-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition text-center flex-1 ${
+            className={`border-2 border-dashed rounded-xl py-6 px-4 flex flex-col items-center justify-center gap-2 cursor-pointer transition text-center focus-within:ring-2 focus-within:ring-indigo-500 flex-1 ${
               dragOverKey === dragKey
                 ? "border-emerald-500 bg-emerald-50/50"
                 : "border-slate-200 hover:border-emerald-400 hover:bg-slate-50/80 bg-slate-50/40"
@@ -67,26 +72,27 @@ export function CatalogDropzone({
                 Kéo thả hoặc nhấn để chọn Danh mục chuẩn
               </span>
               <span className="text-[11px] font-mono text-slate-400 mt-0.5 block">
-                Nếu không có catalog, hệ thống kích hoạt ER Strategy tự động
+                Không có danh mục: dùng chiến lược đã chọn trong Gói cấu hình
               </span>
             </div>
-          </label>
           <input
             id={inputId}
             type="file"
             accept=".csv,.xlsx,.xls"
-            className="hidden"
+            disabled={busy}
+            className="sr-only"
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) onFile(f);
               e.target.value = "";
             }}
           />
+          </label>
         </>
       ) : (
         <div className="rounded-lg p-3 bg-slate-50/80 border border-slate-200 text-xs flex-1 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
                 <span className="font-semibold text-slate-800 truncate" title={fileState.fileName}>
@@ -99,15 +105,17 @@ export function CatalogDropzone({
                 </span>
                 <button
                   type="button"
+                  disabled={busy}
                   onClick={onRemove}
-                  aria-label="Xóa tệp"
-                  className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                  aria-label={"Xóa danh mục " + fileState.fileName}
+                  className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Trash2 size={14} />
                 </button>
               </div>
             </div>
 
+            <MappingDetails fileState={fileState} catalog />
             <div className="flex flex-wrap gap-1 mt-3">
               {fileState.mapping &&
                 Object.entries(fileState.mapping)
@@ -125,7 +133,7 @@ export function CatalogDropzone({
 
           <div className="mt-3 p-2 rounded bg-emerald-50/50 border border-emerald-100 text-[11px] text-emerald-800 flex items-center gap-1.5">
             <CheckCircle2 size={13} className="text-emerald-600 flex-shrink-0" />
-            <span>Kích hoạt cơ chế <strong>Catalog Multi-tier Matching</strong> (3 tầng tối ưu).</span>
+            <span>Đối chiếu theo danh mục: <strong>Mã → Crosswalk → Tên</strong>.</span>
           </div>
         </div>
       )}

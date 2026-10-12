@@ -11,6 +11,10 @@
   code, kbd, samp, pre {
     font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
+
+  button:focus-visible, [role="button"]:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-indigo-600;
+  }
 }
 
 /* Custom Scrollbar */

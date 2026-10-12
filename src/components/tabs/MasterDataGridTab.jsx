@@ -1,21 +1,34 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Search, X, Download, Copy, Check, FileSpreadsheet } from "lucide-react";
+import { REVENUE_LABELS } from "../../logic/uiPresentation";
 import { formatVND } from "../dashboard/MetricStatCards";
 
 export function MasterDataGridTab({
   integratedRows,
-  manualConfirmations,
   onExportCsv,
   onExportExcel,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [copiedId, setCopiedId] = useState(null);
+  const [copyError, setCopyError] = useState("");
 
-  const handleCopy = (text, id) => {
+  useEffect(() => {
+    if (copiedId === null) return;
+    const timer = setTimeout(() => setCopiedId(null), 1500);
+    return () => clearTimeout(timer);
+  }, [copiedId]);
+
+  const handleCopy = async (text, id) => {
     if (!text || text === "—") return;
-    navigator.clipboard?.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
+    setCopyError("");
+    setCopiedId(null);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(String(text));
+      setCopiedId(id);
+    } catch {
+      setCopyError("Không sao chép được mã đơn. Bạn có thể chọn và sao chép trực tiếp trong bảng.");
+    }
   };
 
   const filteredRows = integratedRows.filter((r) => {
@@ -35,7 +48,7 @@ export function MasterDataGridTab({
     <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
       {/* Toolbar */}
       <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-slate-700">
             Tổng cộng: {integratedRows.length} bản ghi
           </span>
@@ -46,14 +59,15 @@ export function MasterDataGridTab({
           )}
         </div>
 
-        <div className="flex items-center gap-2 flex-1 max-w-md ml-auto">
-          <div className="relative flex-1">
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:flex-1 sm:max-w-md sm:ml-auto min-w-0">
+          <div className="relative min-w-0 flex-1">
             <Search
               size={14}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
             />
             <input
               type="text"
+              aria-label="Tìm trong dữ liệu tích hợp"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Tìm theo mã đơn, tên sản phẩm, kênh, SKU..."
@@ -74,6 +88,7 @@ export function MasterDataGridTab({
           <button
             type="button"
             onClick={onExportCsv}
+            aria-label="Xuất dữ liệu CSV"
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 transition shadow-2xs whitespace-nowrap cursor-pointer"
             title="Xuất file CSV (UTF-8 BOM)"
           >
@@ -84,6 +99,7 @@ export function MasterDataGridTab({
           <button
             type="button"
             onClick={onExportExcel}
+            aria-label="Xuất dữ liệu Excel"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-2xs whitespace-nowrap cursor-pointer"
             title="Xuất bảng tính Excel chuẩn (.xlsx)"
           >
@@ -92,6 +108,7 @@ export function MasterDataGridTab({
           </button>
         </div>
       </div>
+      {copyError && <p role="alert" className="px-4 py-2 text-xs text-amber-800 bg-amber-50">{copyError}</p>}
 
       {/* Data Table */}
       <div className="overflow-x-auto max-h-[520px] overflow-y-auto">
@@ -108,24 +125,25 @@ export function MasterDataGridTab({
               <th className="px-3.5 py-2.5 whitespace-nowrap text-right">SL</th>
               <th className="px-3.5 py-2.5 whitespace-nowrap text-right">Đơn Giá</th>
               <th className="px-3.5 py-2.5 whitespace-nowrap text-right">Thành Tiền</th>
-              <th className="px-3.5 py-2.5 whitespace-nowrap text-center">Trạng Thái Khớp</th>
+              <th className="px-3.5 py-2.5 whitespace-nowrap text-center">Trạng Thái Liên Kết</th>
+              <th className="px-3.5 py-2.5 whitespace-nowrap text-center">Chất Lượng Dữ Liệu</th>
+              <th className="px-3.5 py-2.5 whitespace-nowrap">Đưa vào báo cáo?</th>
+              <th className="px-3.5 py-2.5 whitespace-nowrap text-right">Giá trị cộng báo cáo</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="p-8 text-center text-slate-400 text-xs">
+                <td colSpan={14} className="p-8 text-center text-slate-400 text-xs">
                   Không tìm thấy dòng dữ liệu nào khớp với từ khóa "{searchTerm}".
                 </td>
               </tr>
             ) : (
               filteredRows.map((r, i) => {
                 const rowId = r.rowIndex !== undefined ? r.rowIndex : i;
-                const manual = manualConfirmations.get(rowId);
-                const isAccepted = manual?.decision === "ACCEPT";
-                const isRejected = manual?.decision === "REJECT";
-                const prodName = isAccepted && r.matched ? r.matched.ten_sp : r.ten_sp || "—";
-                const idCode = isAccepted && r.matched ? r.matched.ma_dinh_danh : r.ma_dinh_danh || "—";
+                const prodName = r.ten_sp || "—";
+                const idCode = r.ma_dinh_danh || "—";
+                const issueCount = r.issues?.length || 0;
 
                 return (
                   <tr key={r.id || `${r.ma_don}-${i}`} className="hover:bg-slate-50/80 transition">
@@ -138,11 +156,12 @@ export function MasterDataGridTab({
                         {r.ma_don && (
                           <button
                             type="button"
-                            onClick={() => handleCopy(r.ma_don, `order-${i}`)}
+                            onClick={() => handleCopy(r.ma_don, `order-${rowId}`)}
+                            aria-label={"Sao chép mã đơn " + r.ma_don}
                             className="text-slate-300 hover:text-slate-600 transition"
                             title="Sao chép mã đơn"
                           >
-                            {copiedId === `order-${i}` ? (
+                            {copiedId === `order-${rowId}` ? (
                               <Check size={12} className="text-emerald-600" />
                             ) : (
                               <Copy size={11} />
@@ -178,24 +197,21 @@ export function MasterDataGridTab({
                       {formatVND(r.thanh_tien)}
                     </td>
                     <td className="px-3.5 py-2 whitespace-nowrap text-center">
-                      {isAccepted ? (
+                      <MatchStatusBadge row={r} />
+                    </td>
+                    <td className="px-3.5 py-2 whitespace-nowrap text-center">
+                      {issueCount === 0 ? (
                         <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Đã duyệt ghép (Tay)
-                        </span>
-                      ) : isRejected ? (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                          Từ chối ghép (Tay)
-                        </span>
-                      ) : r.issues.length === 0 ? (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Sạch
+                          Không phát hiện vấn đề
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                          {r.issues.length} vấn đề
+                          {issueCount} vấn đề
                         </span>
                       )}
                     </td>
+                    <td className="px-3.5 py-2 min-w-[220px] text-slate-600">{REVENUE_LABELS[r.revenueDisposition] || "Chưa xác định điều kiện ghi nhận"}</td>
+                    <td className="px-3.5 py-2 whitespace-nowrap text-right font-mono font-semibold">{r.revenueDisposition === "INCLUDED" ? formatVND(r.thanh_tien) : formatVND(0)}</td>
                   </tr>
                 );
               })
@@ -205,4 +221,20 @@ export function MasterDataGridTab({
       </div>
     </div>
   );
+}
+
+function MatchStatusBadge({ row }) {
+  const labels = {
+    MATCHED_EXACT: row.matchTier === 'tier2_crosswalk' ? 'Khớp qua Crosswalk' : 'Khớp mã chính xác',
+    MATCHED_FUZZY_HIGH: 'Tự động ghép theo tên',
+    NEEDS_CONFIRMATION: 'Chờ duyệt liên kết',
+    MATCHED_CONFIRMED_USER: 'Đã duyệt ghép',
+    REJECTED_USER: 'Đã từ chối ghép',
+    UNRESOLVED: 'Chưa có liên kết',
+  };
+  const linked = ['MATCHED_EXACT', 'MATCHED_FUZZY_HIGH', 'MATCHED_CONFIRMED_USER'].includes(row.matchStatus);
+  const style = linked ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : row.matchStatus === 'NEEDS_CONFIRMATION' ? 'bg-amber-50 text-amber-800 border-amber-200'
+      : 'bg-slate-100 text-slate-600 border-slate-200';
+  return <span className={'px-2 py-0.5 rounded-full text-[11px] font-semibold border ' + style}>{labels[row.matchStatus] || 'Chưa xác định'}</span>;
 }

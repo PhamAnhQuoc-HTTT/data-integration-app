@@ -149,7 +149,7 @@ export function detectFields(headers) {
   mapping.gia_bia = -1;
   pick('gia_bia', ['gia bia', 'gia niem yet', 'list price']);
   pick('phan_loai', ['ten phan loai hang', 'variation']);
-  pick('hoan_tra', ['trang thai tra hang/hoan tien', 'cancelation/return status', 'cancellation/return status']);
+  pick('hoan_tra', ['trang thai tra hang/hoan tien', 'cancelation/return status', 'cancellation/return status', 'return status', 'refund status', 'return/refund status']);
   // These are product-line amounts, not payment totals or shipping fees.
   pick('gia_dong', ['sku subtotal after discount', 'item subtotal']);
   if (mapping.gia_dong >= 0) mapping.gia = -1;
