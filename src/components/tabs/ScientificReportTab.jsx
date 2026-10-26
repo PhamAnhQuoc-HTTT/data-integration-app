@@ -254,7 +254,7 @@ export function ScientificReportTab({ result }) {
             </div>
           </div>
         </div>
-        <p className="text-xs text-slate-600 mt-3">Giá trị chờ xác định trạng thái: {formatVND(gov.unconfirmedRevenue || 0)}. Phần nghi trùng: {formatVND(gov.duplicateRevenueDiscrepancy || 0)} (chưa tự trừ). Có {gov.excludedRowsCount || 0} dòng không được cộng vào báo cáo. Các con số này chưa chứng minh mức giảm sai lệch so với Ground Truth.</p>
+        <p className="text-xs text-slate-600 mt-3">Giá trị chờ xác định trạng thái: {formatVND(gov.unconfirmedRevenue || 0)}. Phần nghi trùng: {formatVND(gov.duplicateRevenueDiscrepancy || 0)} (chưa tự trừ). Giá trị giữ chờ do lặp khóa dòng đơn cùng hệ thống/shop: {formatVND(gov.duplicateReviewRevenue || 0)}. Có {gov.excludedRowsCount || 0} dòng không được cộng vào báo cáo. Các con số này chưa chứng minh mức giảm sai lệch so với Ground Truth.</p>
       </div>
     </div>
   );

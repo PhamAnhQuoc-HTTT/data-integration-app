@@ -18,11 +18,12 @@ export function normalizeText(value) {
   return text === "" ? null : text;
 }
 
-/** Chuẩn hóa mạnh cho việc SO KHỚP: bỏ dấu, hạ chữ thường, bỏ chú thích trong ngoặc. */
+/** Khóa SO KHỚP bỏ dấu và dấu câu, giữ thông tin trong ngoặc. */
 export function normalizeTextForMatching(value) {
   if (value === null || value === undefined) return "";
   let text = String(value).trim().toLowerCase();
-  text = text.replace(/\(.*?\)/g, " "); // bỏ chú thích "(bản đẹp)"...
+  // Parentheses may contain edition, volume or language evidence. Preserve
+  // their content; only punctuation is removed below.
   text = removeDiacritics(text).toLowerCase();
   text = text.replace(/[^a-z0-9\s]/g, " ");
   text = text.replace(/\s+/g, " ").trim();
@@ -147,12 +148,38 @@ export function isValidDate(value) {
   return normalizeDate(value) !== null;
 }
 
-export function normalizeTransactionStatus(status, returnStatus) {
+export function normalizeTransactionStatus(status, returnStatus, { noReturnMarkers = [] } = {}) {
   const value = removeDiacritics(returnStatus || '').toLowerCase().trim();
+  // Main cancellation/refund evidence must not be hidden by an auxiliary
+  // request, rejected request or an empty marker.
+  const main = normalizeOrderStatus(status);
   if (/^(da hoan tien|refunded|refund completed|da tra hang|returned)$/.test(value)) return 'Trả hàng';
+  if (main === 'Đã hủy' || main === 'Trả hàng') return main;
   if (/^(cancelled|canceled|da huy)$/.test(value)) return 'Đã hủy';
+  if (/^(return rejected|refund rejected|return request rejected|refund request rejected|yeu cau (tra hang|hoan tien) bi tu choi|tu choi (tra hang|hoan tien))$/.test(value)) return main;
+  const markers = noReturnMarkers.map(v => removeDiacritics(String(v)).toLowerCase().trim());
+  if (markers.includes(value)) return main;
   if (value && !/^(khong tra hang|no return|none|not requested)$/.test(value)) return 'Chờ đối soát trả hàng/hoàn tiền';
-  return normalizeOrderStatus(status);
+  return main;
+}
+
+/** Preserve the operational date alongside its evidential status. */
+export function dateEvidence(value, locale = null) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return { canonicalDate: null, dateValidity: 'MISSING' };
+  const parts = raw.match(/^(\d{1,2})([/.-])(\d{1,2})\2(\d{4})(?:$|[T\s])/);
+  if (parts) {
+    const first = Number(parts[1]), second = Number(parts[3]), year = Number(parts[4]);
+    const ambiguous = first <= 12 && second <= 12 && first !== second;
+    if (ambiguous && !['DMY', 'MDY'].includes(locale)) return { canonicalDate: null, dateValidity: 'AMBIGUOUS_LOCALE' };
+    const monthFirst = locale === 'MDY' || (!locale && second > 12);
+    const day = monthFirst ? second : first, month = monthFirst ? first : second;
+    return validCalendarDate(year, month, day)
+      ? { canonicalDate: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`, dateValidity: 'VALID_CONFIRMED' }
+      : { canonicalDate: null, dateValidity: 'INVALID' };
+  }
+  const iso = normalizeDate(value);
+  return { canonicalDate: iso, dateValidity: iso ? 'VALID_CONFIRMED' : 'INVALID' };
 }
 
 // ----------------------------------------------------------------------

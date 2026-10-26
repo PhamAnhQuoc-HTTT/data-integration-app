@@ -14,7 +14,7 @@
  * Đánh giá mức độ cải thiện của Phương pháp đối chiếu nhiều tầng so với Exact Matching đơn thuần.
  */
 import { normalizeTextForMatching } from "./normalize";
-import { bookConflict, bookEntityKey, bookVariantKey } from './bookMatching';
+import { bookConflict, bookEntityKey, bookVariantKey, bookNeedsReview } from './bookMatching';
 import { isSharedBookId } from './bookMatching';
 import { validateCatalog } from './catalogValidation';
 import { validateCrosswalk, sourceKey } from './crosswalk';
@@ -65,8 +65,10 @@ export function resolveEntities(
     fuzzyHighThreshold = FUZZY_HIGH_THRESHOLD,
     fuzzyConfirmThreshold = FUZZY_CONFIRM_THRESHOLD,
     masterSource = null,
+    matchingMode = 'MULTI_TIER',
   } = {}
 ) {
+  if (!['EXACT_ONLY', 'FUZZY_ONLY', 'MULTI_TIER'].includes(matchingMode)) throw new Error('Chế độ benchmark đối chiếu không hợp lệ.');
   catalog = validateCatalog(catalog, { sourceVariants: masterSource !== null });
   const catalogById = new Map();
   catalog.forEach((c) => {
@@ -120,14 +122,14 @@ export function resolveEntities(
     let catalogIdExists = Boolean(idKey && catalogById.has(idKey));
     let variantConflict = catalogIdExists && !idCandidates.length;
     const idHit = idCandidates.length === 1 ? idCandidates[0] : null;
-    const canExactMatch = Boolean(idHit && !bookConflict(row, idHit) &&
+    const canExactMatch = Boolean(idHit && (row.sourceCodeType !== 'INTERNAL' || (masterSource && row.__source === masterSource)) && !bookConflict(row, idHit) &&
       (!masterSource || row.__source === masterSource || isSharedBookId(idKey)));
     if (canExactMatch) {
       exactOnlyMatchesCount++;
     }
 
     // Tầng 1: Khớp mã định danh chính xác (Exact Identifier)
-    if (canExactMatch) {
+    if (canExactMatch && matchingMode !== 'FUZZY_ONLY') {
       matched = idHit;
       status = "MATCHED_EXACT";
       score = 100;
@@ -137,10 +139,10 @@ export function resolveEntities(
 
     // Tầng 2: Crosswalk mã nội bộ (nếu tầng 1 chưa khớp)
     const crosswalkKey = [row.__sourceName, row.__source, ''].map(source => JSON.stringify([sourceKey(source), idKey])).find(key => crosswalkById.has(key));
-    if (canExactMatch && crosswalkKey && crosswalkById.get(crosswalkKey) !== idKey) {
+    if (matchingMode === 'MULTI_TIER' && canExactMatch && crosswalkKey && crosswalkById.get(crosswalkKey) !== idKey) {
       throw new Error(`Crosswalk mâu thuẫn với mã khớp trực tiếp ${idKey}. Hãy kiểm tra phạm vi mã nguồn và danh mục.`);
     }
-    if (status === "UNRESOLVED" && idKey && crosswalkKey) {
+    if (matchingMode === 'MULTI_TIER' && status === "UNRESOLVED" && idKey && crosswalkKey) {
       const mappedStandardId = crosswalkById.get(crosswalkKey);
       // A crosswalk translates identifier namespaces; still check edition/binding.
       const mappedRow = { ...row, ma_dinh_danh: mappedStandardId };
@@ -161,7 +163,7 @@ export function resolveEntities(
     }
 
     // Tầng 3: Fuzzy Matching theo tên sản phẩm
-    if (status === "UNRESOLVED") {
+    if (matchingMode !== 'EXACT_ONLY' && status === "UNRESOLVED") {
       const rowKey = normalizeTextForMatching(row[titleField]);
       if (rowKey) {
         let best = null;
@@ -183,13 +185,13 @@ export function resolveEntities(
         if (best && bestScore >= fuzzyConfirmThreshold) {
           matched = best;
           score = bestScore;
-          if (bestScore >= fuzzyHighThreshold && bestScore - runnerUpScore > 5) {
+          if (bestScore >= fuzzyHighThreshold && bestScore - runnerUpScore > 5 && !bookNeedsReview(row, best)) {
             status = "MATCHED_FUZZY_HIGH";
             tier = "tier3_fuzzy_high";
             tier3HighCount++;
           } else {
             status = "NEEDS_CONFIRMATION";
-            reviewReason = bestScore - runnerUpScore <= 5 ? 'AMBIGUOUS_CANDIDATES' : 'FUZZY_REVIEW';
+            reviewReason = bestScore - runnerUpScore <= 5 ? 'AMBIGUOUS_CANDIDATES' : bookNeedsReview(row, best) ? 'INCOMPLETE_IDENTITY' : 'FUZZY_REVIEW';
             tier = "tier3_fuzzy_confirm";
             tier3ConfirmCount++;
           }

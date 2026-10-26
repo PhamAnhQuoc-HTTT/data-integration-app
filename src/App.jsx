@@ -16,6 +16,7 @@ import { runPipeline, applyManualDecisions } from "./logic/pipeline";
 import { parseCrosswalk } from './logic/crosswalk';
 import { reconciliationCounts } from './logic/reconciliation';
 import { getExportData, csvCell } from "./logic/exportData";
+import { getReportTables } from './logic/reportExport';
 import { STRATEGY_LABELS, sourceIndexAfterRemoval, validateUiConfig } from "./logic/uiConfig";
 
 // Components
@@ -35,7 +36,7 @@ import { HitlWorkbenchTab } from "./components/tabs/HitlWorkbenchTab";
 import { ScientificReportTab } from "./components/tabs/ScientificReportTab";
 import { MasterDataGridTab } from "./components/tabs/MasterDataGridTab";
 
-const MAX_ORDER_FILES = 4;
+const MAX_ORDER_FILES = 10;
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
 export default function App() {
@@ -279,6 +280,11 @@ export default function App() {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Ket_Qua_Tich_Hop");
+    for (const table of getReportTables(result)) {
+      const reportSheet = XLSX.utils.aoa_to_sheet([table.headers, ...table.rows]);
+      reportSheet['!cols'] = table.headers.map((h, i) => ({ wch: Math.min(65, Math.max(16, h.length + 2, ...table.rows.map(r => String(r[i] ?? '').length + 2))) }));
+      XLSX.utils.book_append_sheet(wb, reportSheet, table.name);
+    }
     XLSX.writeFile(wb, "du-lieu-tich-hop-ban-hang.xlsx");
   };
 

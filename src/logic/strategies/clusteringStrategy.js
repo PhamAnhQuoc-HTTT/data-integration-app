@@ -1,6 +1,6 @@
 import { extractUniqueEntitiesFromRows } from '../bipartiteMatching';
 import { tokenSortRatio } from '../entityResolution';
-import { bookConflict, bookEntityKey, canMatchIdentifier } from '../bookMatching';
+import { bookConflict, bookEntityKey, canMatchIdentifier, bookNeedsReview } from '../bookMatching';
 
 /** Leader clustering: only accepted evidence contributes to canonical attributes. */
 export function executeClusteringStrategy({ allRows, fuzzyHighThreshold = 90, fuzzyConfirmThreshold = 75 }) {
@@ -29,7 +29,7 @@ export function executeClusteringStrategy({ allRows, fuzzyHighThreshold = 90, fu
     }
     const ambiguous = exact.length > 1 || (!exact.length && candidates.length > 1 && best.score - candidates[1].score <= 5);
     const status = exact.length === 1 ? 'MATCHED_EXACT'
-      : best.score >= fuzzyHighThreshold && !ambiguous ? 'MATCHED_FUZZY_HIGH' : 'NEEDS_CONFIRMATION';
+      : best.score >= fuzzyHighThreshold && !ambiguous && !bookNeedsReview(item, best.cluster.leader) ? 'MATCHED_FUZZY_HIGH' : 'NEEDS_CONFIRMATION';
     mappings.set(key(item), {cluster: best.cluster, matchStatus: status, matchScore: best.score});
     if (status === 'NEEDS_CONFIRMATION') continue;
     const cluster = best.cluster;

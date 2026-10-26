@@ -4,12 +4,12 @@
  * 
  * Áp dụng khi người dùng KHÔNG CÓ file danh mục sản phẩm chuẩn (Master Catalog).
  * Tự động đối chiếu chéo giữa các nguồn đơn hàng (ví dụ: POS vs Shopee / Lazada / FAHASA),
- * giải quyết triệt để vấn đề tranh chấp khớp (conflicts) bằng giải thuật Best-First Greedy Matching,
+ * chọn các cặp không dùng lại thực thể theo thứ tự điểm (Best-First Greedy Matching),
  * và tự động tổng hợp Danh mục sản phẩm chuẩn đại diện (Canonical Catalog).
  */
 
 import { normalizeTextForMatching, normalizeNumber, removeDiacritics } from "./normalize";
-import { bookConflict, bookEntityKey, canMatchIdentifier } from './bookMatching';
+import { bookConflict, bookEntityKey, canMatchIdentifier, bookNeedsReview } from './bookMatching';
 import { tokenSortRatio, FUZZY_HIGH_THRESHOLD, FUZZY_CONFIRM_THRESHOLD } from "./entityResolution";
 
 /**
@@ -34,6 +34,7 @@ export function extractUniqueEntitiesFromRows(rows, sourceLabel) {
         ma_dinh_danh: rawId || "",
         ten_sp: rawTitle,
         phan_loai: r.phan_loai,
+        sourceCodeType: r.sourceCodeType,
         ten_sp_norm: normTitle,
         thuong_hieu: r.thuong_hieu || "",
         prices: [],
@@ -149,7 +150,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
     const ambiguous = candidatePairs.some(other => other !== pair &&
       (other.entityA.entityKey === keyA || other.entityB.entityKey === keyB) &&
       other.score >= pair.score - 5);
-    const status = pair.score >= highThreshold && !ambiguous ? "MATCHED_FUZZY_HIGH" : "NEEDS_CONFIRMATION";
+    const status = pair.score >= highThreshold && !ambiguous && !bookNeedsReview(pair.entityA, pair.entityB) ? "MATCHED_FUZZY_HIGH" : "NEEDS_CONFIRMATION";
     const tier = status === 'MATCHED_FUZZY_HIGH' ? "tier3_fuzzy_high" : "tier3_fuzzy_confirm";
 
     matchedPairs.push({
@@ -179,7 +180,7 @@ export function matchBipartiteEntities(entitiesA, entitiesB, options = {}) {
 }
 
 /**
- * Tự động tổng hợp Master Catalog từ kết quả ghép cặp tối ưu (Canonical Synthesis)
+ * Tổng hợp Catalog đại diện từ các cặp đã chọn, không bảo đảm tối ưu toàn cục.
  */
 export function synthesizeCanonicalCatalog(bipartiteResult) {
   const catalog = [];

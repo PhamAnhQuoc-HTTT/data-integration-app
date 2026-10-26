@@ -8,9 +8,12 @@ import { PRESETS } from '../upload/PresetSelector';
 import { createConfigDraft, sourceIndexAfterRemoval, validateUiConfig } from '../../logic/uiConfig';
 import * as pipeline from '../../logic/pipeline';
 import fs from 'node:fs';
+import * as XLSX from 'xlsx';
 
 // Chart rendering is outside the scope of these interaction tests.
 vi.mock('../tabs/OverviewTab', () => ({ OverviewTab: () => <div>Tổng quan kết quả</div> }));
+// Capture the actual export workbook without writing to the user's downloads.
+vi.mock('xlsx', async importOriginal => ({ ...await importOriginal(), writeFile: vi.fn() }));
 
 let root, container;
 beforeEach(() => {
@@ -28,6 +31,8 @@ afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 const render = async element => { await act(async () => root.render(element)); };
 const button = text => [...document.querySelectorAll('button')].find(element => element.textContent.includes(text));
@@ -100,7 +105,7 @@ describe('Upload batch and safe reset', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
     });
     expect(document.body.textContent).toContain('Đã nạp thêm 2 tệp');
-    expect(document.body.textContent).toContain('2/4 file');
+    expect(document.body.textContent).toContain('2/10 tệp');
   });
   it('warns on a multi-file catalog drop without silently selecting its first workbook', async () => {
     await render(<App />);
@@ -117,12 +122,32 @@ describe('Upload batch and safe reset', () => {
   it('reads a batch in selection order, reports excess files and does not hide them silently', async () => {
     await render(<App />);
     expect(document.getElementById('bsi-file-orders').multiple).toBe(true);
-    await uploadBatch([1, 2, 3, 4, 5].map(i => csvFile('Shopee_' + i + '.csv', orders)));
-    expect(document.body.textContent).toContain('Đã nạp thêm 4 tệp');
-    expect(document.body.textContent).toContain('Chưa nạp do giới hạn 4 tệp: Shopee_5.csv');
+    await uploadBatch(Array.from({ length: 11 }, (_, i) => csvFile('Shopee_' + (i + 1) + '.csv', orders)));
+    expect(document.body.textContent).toContain('Đã nạp thêm 10 tệp');
+    expect(document.body.textContent).toContain('Chưa nạp do giới hạn 10 tệp: Shopee_11.csv');
+    expect(document.body.textContent).toContain('10/10 tệp');
+    expect(document.getElementById('bsi-file-orders')).toBeNull();
     await openConfig();
     await click(button('Chọn một tệp đơn hàng'));
-    expect([...document.getElementById('master-source').options].map(option => option.textContent)).toEqual([1, 2, 3, 4].map(i => 'Shopee_' + i + '.csv'));
+    expect([...document.getElementById('master-source').options].map(option => option.textContent)).toEqual(Array.from({ length: 10 }, (_, i) => 'Shopee_' + (i + 1) + '.csv'));
+  });
+  it('supports incremental batches up to ten, then removal and replacement', async () => {
+    await render(<App />);
+    await uploadBatch(Array.from({ length: 6 }, (_, i) => csvFile('Shopee_' + (i + 1) + '.csv', orders)));
+    expect(document.body.textContent).toContain('6/10 tệp');
+    await uploadBatch(Array.from({ length: 5 }, (_, i) => csvFile('Shopee_' + (i + 7) + '.csv', orders)));
+    expect(document.body.textContent).toContain('Đã nạp thêm 4 tệp');
+    expect(document.body.textContent).toContain('Chưa nạp do giới hạn 10 tệp: Shopee_11.csv');
+    const list = document.querySelector('[aria-label="Danh sách tệp đơn hàng đã nạp"]');
+    expect(list.tabIndex).toBe(0);
+    expect(list.querySelectorAll('button[aria-label^="Xóa tệp"]')).toHaveLength(10);
+    await click(list.querySelector('button[aria-label="Xóa tệp Shopee_3.csv"]'));
+    expect(document.body.textContent).toContain('9/10 tệp');
+    expect(document.getElementById('bsi-file-orders')).toBeTruthy();
+    await uploadBatch([csvFile('Shopee_11.csv', orders)]);
+    expect(document.body.textContent).toContain('10/10 tệp');
+    expect(document.querySelector('button[aria-label="Xóa tệp Shopee_11.csv"]')).toBeTruthy();
+    expect(document.querySelector('button[aria-label="Xóa tệp Shopee_3.csv"]')).toBeNull();
   });
   it('reports duplicate names and invalid files while retaining other valid files', async () => {
     await render(<App />);
@@ -130,7 +155,7 @@ describe('Upload batch and safe reset', () => {
     expect(document.body.textContent).toContain('Đã nạp thêm 2 tệp');
     expect(document.body.textContent).toContain('Bỏ qua tệp trùng tên: SHOPEE.csv');
     expect(document.body.textContent).toContain('Không đọc được: data.txt');
-    expect(document.body.textContent).toContain('2/4 file');
+    expect(document.body.textContent).toContain('2/10 tệp');
   });
   it('reads UTF-8 CSV without BOM and preserves long order IDs as text', async () => {
     await render(<App />);
@@ -176,6 +201,127 @@ describe('Upload batch and safe reset', () => {
     expect(document.getElementById('bsi-file-orders')).toBeTruthy();
     expect(document.body.textContent).not.toContain('Tích Hợp Hoàn Tất');
     expect(document.body.textContent).not.toContain('Đã chấp thuận');
+  });
+});
+
+describe('Ten-source UI and exported results', () => {
+  it.skipIf(!fs.existsSync('sample-data/Danh_Muc_Sach_Master.xlsx'))('keeps the Huy dataset totals when its four order exports are split into ten workbooks', async () => {
+    await render(<App />);
+    const sourceNames = fs.readdirSync('sample-data').filter(name => name.startsWith('Don_Hang_') && name.endsWith('.xlsx'));
+    const splitFiles = sourceNames.flatMap(name => {
+      const workbook = XLSX.read(fs.readFileSync('sample-data/' + name), { type: 'buffer', cellDates: true });
+      const [headers, ...rows] = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' });
+      const partCount = rows.length >= 100 ? 3 : 2;
+      return Array.from({ length: partCount }, (_, i) => {
+        const part = rows.slice(Math.floor(i * rows.length / partCount), Math.floor((i + 1) * rows.length / partCount));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([headers, ...part]), 'Orders');
+        const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        const file = new File([], name.replace('.xlsx', '_part_' + (i + 1) + '.xlsx'));
+        Object.defineProperty(file, 'arrayBuffer', { value: async () => bytes });
+        return file;
+      });
+    });
+    expect(splitFiles).toHaveLength(10);
+    await uploadBatch(splitFiles);
+    expect(document.body.textContent).toContain('10/10 tệp');
+    const bytes = fs.readFileSync('sample-data/Danh_Muc_Sach_Master.xlsx');
+    const master = new File([], 'Master.xlsx');
+    Object.defineProperty(master, 'arrayBuffer', { value: async () => Uint8Array.from(bytes).buffer });
+    await act(async () => {
+      const input = document.getElementById('bsi-file-catalog');
+      Object.defineProperty(input, 'files', { configurable: true, value: [master] });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    const runSpy = vi.spyOn(pipeline, 'runPipeline');
+    await click(button('Khởi Chạy Pipeline'));
+    const result = runSpy.mock.results.at(-1).value;
+    expect(result.integrated).toHaveLength(266);
+    expect(new Set(result.integrated.map(row => row.recordId)).size).toBe(266);
+    expect(result.stats.matchedCount).toBe(255);
+    expect(result.pendingConfirmations.filter(row => row.matchStatus === 'NEEDS_CONFIRMATION')).toHaveLength(0);
+    expect(result.integrated.filter(row => row.matchStatus === 'UNRESOLVED')).toHaveLength(11);
+    expect(result.revenueTotal).toBe(26644760);
+    expect(result.businessReports.unallocatedProduct).toBe(1281700);
+    expect(result.businessReports.unallocatedPeriod).toBe(3115196);
+    vi.mocked(XLSX.writeFile).mockClear();
+    await click(button('Xuất Excel'));
+    const workbook = vi.mocked(XLSX.writeFile).mock.calls[0][0];
+    const reread = XLSX.read(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
+    const rows = XLSX.utils.sheet_to_json(reread.Sheets.Ket_Qua_Tich_Hop, { header: 1, defval: '' });
+    expect(rows).toHaveLength(267);
+    expect(rows[0]).toHaveLength(41);
+    expect(rows.slice(1).map(row => row[1])).toEqual(result.integrated.map(row => row.ma_don));
+    expect(new Set(rows.slice(1).map(row => row[0])).size).toBe(10);
+    for (const [sheet, column] of [['Bao_Cao_Kenh', 1], ['Bao_Cao_San_Pham', 3], ['Bao_Cao_Thang', 1]]) {
+      expect(XLSX.utils.sheet_to_json(reread.Sheets[sheet], { header: 1 }).slice(1).reduce((sum, row) => sum + Number(row[column]), 0)).toBe(26644760);
+    }
+    await click(button('Tồn kho master'));
+    await act(async () => {
+      const select = document.querySelector('select[aria-label="Cột tồn đầu kỳ trong master"]');
+      select.value = '8'; select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain('SL giảm: 271');
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(57);
+  });
+  it('processes ten files plus a separate catalog/crosswalk and preserves rows, IDs and totals in Excel and CSV', async () => {
+    await render(<App />);
+    const sources = Array.from({ length: 10 }, (_, i) => {
+      const channel = ['Shopee', 'POS', 'Lazada', 'TikTok_Shop'][i % 4];
+      const orderId = '5802206000000009' + String(i).padStart(2, '0');
+      const header = 'Date,Order ID,Product Name,Seller SKU,Quantity,Unit Price,Status';
+      return { name: channel + '_part_' + (i + 1) + '.csv', orderId, csv: header + '\n2025-07-20,' + orderId + ',Nhà Giả Kim,9780306406157,2,100000,Completed\n2025-07-20,CANCEL-' + i + ',Nhà Giả Kim,9780306406157,1,100000,Cancelled' };
+    });
+    await uploadBatch(sources.map(source => csvFile(source.name, source.csv)));
+    expect(document.body.textContent).toContain('10/10 tệp');
+    await uploadCsv('#bsi-file-catalog', 'Master.csv', catalog);
+    await uploadCsv('input[type="file"]:not(#bsi-file-catalog)', 'crosswalk.csv', 'internal_code,standard_code\nLOCAL,9780306406157');
+    expect(document.body.textContent).toContain('crosswalk.csv');
+    const runSpy = vi.spyOn(pipeline, 'runPipeline');
+    await click(button('Khởi Chạy Pipeline'));
+    expect(document.body.textContent).toContain('Tích Hợp Hoàn Tất: 20 dòng dữ liệu');
+    expect(document.body.textContent).toContain('20/20');
+    const result = runSpy.mock.results.at(-1).value;
+    expect(result.integrated).toHaveLength(20);
+    expect(new Set(result.integrated.map(row => row.recordId)).size).toBe(20);
+    expect(result.revenueTotal).toBe(2000000);
+    expect(result.governanceAudit.cancelledRevenuePrevented).toBe(1000000);
+    expect(result.businessReports.byChannel.reduce((sum, row) => sum + row.amount, 0)).toBe(2000000);
+    expect(result.businessReports.byProduct.reduce((sum, row) => sum + row.amount, 0)).toBe(2000000);
+    expect(result.businessReports.byMonth).toEqual([{ month: '2025-07', amount: 2000000 }]);
+    const expectedIds = sources.flatMap((source, i) => [source.orderId, 'CANCEL-' + i]);
+    const verifyRows = rows => {
+      expect(rows).toHaveLength(21);
+      expect(rows[0]).toHaveLength(41);
+      expect(rows.slice(1).map(row => row[1])).toEqual(expectedIds);
+      expect(rows.slice(1).filter(row => row[20] === 'INCLUDED').reduce((sum, row) => sum + Number(row[10]), 0)).toBe(2000000);
+    };
+    vi.mocked(XLSX.writeFile).mockClear();
+    await click(button('Xuất Excel'));
+    expect(XLSX.writeFile).toHaveBeenCalledTimes(1);
+    const [workbook, filename] = vi.mocked(XLSX.writeFile).mock.calls[0];
+    expect(filename).toBe('du-lieu-tich-hop-ban-hang.xlsx');
+    const reread = XLSX.read(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { type: 'buffer' });
+    expect(reread.SheetNames).toEqual(['Ket_Qua_Tich_Hop', 'Bao_Cao_Kenh', 'Bao_Cao_San_Pham', 'Bao_Cao_Thang', 'Doi_Soat_Bao_Cao']);
+    verifyRows(XLSX.utils.sheet_to_json(reread.Sheets.Ket_Qua_Tich_Hop, { header: 1, defval: '' }));
+    for (const [sheet, column] of [['Bao_Cao_Kenh', 1], ['Bao_Cao_San_Pham', 3], ['Bao_Cao_Thang', 1]]) {
+      expect(XLSX.utils.sheet_to_json(reread.Sheets[sheet], { header: 1 }).slice(1).reduce((sum, row) => sum + Number(row[column]), 0)).toBe(2000000);
+    }
+    let csvBlob;
+    class DownloadURL extends URL {
+      static createObjectURL(blob) { csvBlob = blob; return 'blob:test-export'; }
+      static revokeObjectURL() {}
+    }
+    vi.stubGlobal('URL', DownloadURL);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await click(button('Xuất CSV'));
+    const csvText = await new Promise((resolve, reject) => {
+      const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsText(csvBlob);
+    });
+    const csvWorkbook = XLSX.read(csvText, { type: 'string', raw: true });
+    verifyRows(XLSX.utils.sheet_to_json(csvWorkbook.Sheets[csvWorkbook.SheetNames[0]], { header: 1, defval: '' }));
+    // Release the download URL timer while its test URL implementation exists.
+    await new Promise(resolve => setTimeout(resolve, 3050));
   });
 });
 

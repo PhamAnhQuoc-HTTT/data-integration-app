@@ -4,6 +4,7 @@ export const REVENUE_LABELS = {
   INVALID_VALUE: 'Không — giá hoặc số lượng không hợp lệ',
   UNCONFIRMED_STATUS: 'Không — trạng thái chưa đủ điều kiện',
   UNKNOWN_DATA_TYPE: 'Không — chưa xác định nghiệp vụ bảng ngang',
+  DUPLICATE_REVIEW: 'Chờ — lặp khóa dòng đơn, cần đối soát snapshot',
 };
 
 export function linkingSummary(result) {

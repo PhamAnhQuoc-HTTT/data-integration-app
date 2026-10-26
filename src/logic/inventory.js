@@ -35,7 +35,7 @@ export function buildInventoryProposal(result, catalogFile, stockColumn) {
   const rows = result.integrated || [];
   // Do not silently choose one repeated order line. Hold all members for review.
   const counts = new Map();
-  const orderKey = row => JSON.stringify([row.__source || row.nguon, row.ma_don, row.productKey || row.ma_dinh_danh]);
+  const orderKey = row => JSON.stringify([row.__source || row.nguon, row.shopId || '', row.ma_don, row.sourceOrderLineId || row.productKey || row.ma_dinh_danh]);
   rows.filter(row => row.ma_don).forEach(row => { const key = orderKey(row); counts.set(key, (counts.get(key) || 0) + 1); });
   const movements = rows.map(row => {
     const candidates = linked(row.matchStatus) && row.productKey?.startsWith('CAT:') ? byCode.get(normalizeIdCode(row.ma_dinh_danh)) || [] : [];
@@ -51,8 +51,9 @@ export function buildInventoryProposal(result, catalogFile, stockColumn) {
     else if (!entry) reason = 'Mã master thiếu hoặc bị lặp';
     else if (!validStock(entry.opening)) reason = 'Tồn đầu kỳ không hợp lệ';
     else if (!row.ma_don) reason = 'Thiếu mã đơn để đối soát lần giảm tồn';
+    else if (row.duplicateStatus && row.duplicateStatus !== 'NONE') reason = 'Nhiều dòng nghi trùng giữa các snapshot; chưa xác nhận lần giảm tồn';
     else if (counts.get(orderKey(row)) > 1) reason = 'Nhiều dòng cùng nguồn, đơn và sản phẩm; cần kiểm tra trùng hoặc tách dòng';
-    else if (!isValidDate(row.ngay)) reason = 'Ngày giao dịch chưa hợp lệ để đối soát kỳ tồn';
+    else if ((row.dateValidity && row.dateValidity !== 'VALID_CONFIRMED') || !isValidDate(row.ngay)) reason = 'Ngày giao dịch chưa đủ căn cứ để đối soát kỳ tồn';
     else if (qty === null || !Number.isInteger(qty) || qty <= 0) reason = 'Số lượng không phải số nguyên dương';
     else if (status !== 'Hoàn thành') reason = 'Chưa hoàn thành; chưa suy đoán hàng đã xuất kho';
     else { disposition = 'DEDUCTED'; reason = 'Liên kết được chấp thuận, đơn hoàn thành, số lượng hợp lệ'; entry.deducted += qty; }

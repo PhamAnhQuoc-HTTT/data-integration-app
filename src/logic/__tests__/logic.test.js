@@ -41,8 +41,8 @@ describe("normalizeIdCode", () => {
 });
 
 describe("normalizeTextForMatching", () => {
-  it("removes diacritics and parenthetical annotations", () => {
-    expect(normalizeTextForMatching("Nhà Giả Kim (bản đẹp)")).toBe("nha gia kim");
+  it("removes diacritics while preserving parenthetical identity evidence", () => {
+    expect(normalizeTextForMatching("Nhà Giả Kim (bản đẹp)")).toBe("nha gia kim ban dep");
   });
 });
 
@@ -218,8 +218,10 @@ describe("Strategy Pattern & Resolution Rules (Cơ chế 1, 2, 3)", () => {
 
     const res = executeBipartiteStrategy({ allRows: allSampleRows, sourceRowsMap });
     expect(res.strategyKey).toBe("BIPARTITE");
-    expect(res.bipartiteStats.matchedPairsCount).toBe(2);
-    expect(res.catalog.length).toBe(4);
+    // Binding evidence is retained: the short unspecified title is not enough
+    // to establish the second product under the default fuzzy threshold.
+    expect(res.bipartiteStats.matchedPairsCount).toBe(1);
+    expect(res.catalog.length).toBe(5);
   });
 
   it("pipeline runs with CLUSTERING strategy without catalog file", () => {

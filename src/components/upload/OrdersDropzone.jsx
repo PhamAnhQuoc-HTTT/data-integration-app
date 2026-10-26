@@ -27,7 +27,7 @@ export function OrdersDropzone({
   );
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col h-full hover:border-slate-300 transition-colors">
+    <div className="min-w-0 bg-white border border-slate-200 rounded-xl p-5 shadow-xs flex flex-col h-full hover:border-slate-300 transition-colors">
       <div className="flex items-center gap-3 mb-3">
         <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
           <ShoppingCart size={20} />
@@ -38,11 +38,14 @@ export function OrdersDropzone({
               Tệp Đơn Hàng Đa Nguồn (Multi-source)
             </h3>
             <span className="text-[11px] font-mono font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-              {files.length}/{maxFiles} file
+              {files.length}/{maxFiles} tệp
             </span>
           </div>
           <p className="text-[12px] text-slate-500 mt-0.5">
             Dữ liệu bán hàng từ POS quầy, Shopee, TikTok Shop, Lazada...
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Có thể nạp nhiều tệp cùng kênh. Danh mục và Crosswalk được tải riêng, không tính vào giới hạn này.
           </p>
         </div>
       </div>
@@ -91,7 +94,7 @@ export function OrdersDropzone({
       )}
 
       {files.length > 0 && (
-        <div className="mt-3 space-y-2.5 flex-1">
+        <div role="region" aria-label="Danh sách tệp đơn hàng đã nạp" tabIndex={0} className="mt-3 space-y-2.5 max-h-[32rem] overflow-y-auto overscroll-contain pr-1 min-h-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg">
           {files.map((fileState, i) => {
             const mappedCount = new Set(Object.entries(fileState.mapping || {}).filter(
               ([k, idx]) => k !== "branchColumns" && idx >= 0
@@ -103,7 +106,7 @@ export function OrdersDropzone({
                 className="rounded-lg p-3 bg-slate-50/80 border border-slate-200 text-xs transition hover:bg-slate-50"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-1 items-center gap-2 min-w-0">
                     <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
                     <span className="font-semibold text-slate-800 truncate" title={fileState.fileName}>
                       {fileState.fileName}

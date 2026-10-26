@@ -11,6 +11,8 @@ export function getExportData(result) {
   rows.forEach((r,i) => { const item = result.integrated[i]; r.push(item.phan_loai,item.hoan_tra,item.__raw_trang_thai,item.__priceBasis,item.gia_dong); });
   headers.push('Giá gốc nguồn', 'Giá tham chiếu danh mục', 'NXB/Thương hiệu nguồn', 'Mã NCC nguồn', 'Tên NCC nguồn', 'Ngày nguồn', 'Nguyên nhân liên kết');
   rows.forEach((r,i) => { const item = result.integrated[i]; r.push(item.gia_goc,item.gia_tham_chieu,item.thuong_hieu_nguon,item.ma_ncc_nguon,item.ten_ncc_nguon,item.__raw_ngay,item.matchReason || null); });
+  headers.push('ID thực thể danh mục', 'Ngày có căn cứ', 'Tình trạng ngày', 'Hệ thống nguồn', 'Mã shop', 'Mã dòng đơn nguồn', 'Đối soát trùng', 'Loại mã nguồn');
+  rows.forEach((r,i) => { const item = result.integrated[i]; r.push(item.canonicalEntityId,item.canonicalDate,item.dateValidity,item.sourceSystem,item.shopId,item.sourceOrderLineId,item.duplicateStatus,item.sourceCodeType); });
   return { headers, rows };
 }
 

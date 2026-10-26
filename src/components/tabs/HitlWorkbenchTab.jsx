@@ -25,7 +25,7 @@ export function HitlWorkbenchTab({ pendingConfirmations, manualConfirmations, on
       <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4">
         <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2"><Sparkles size={17} />Đối soát liên kết sách</h3>
         <p className="text-xs text-amber-900 mt-2">Có {counts.pending} dòng cần duyệt, {counts.reviewed} dòng đã duyệt và {counts.unlinked} dòng chưa có liên kết. Số đếm theo dòng dữ liệu, không phải số đầu sách.</p>
-        <p className="text-xs text-slate-600 mt-1">Chỉ đề xuất ghép chưa chắc chắn mới cần chấp thuận hoặc từ chối. Ngưỡng lần chạy: {config.fuzzyConfirmThreshold}% – {config.fuzzyHighThreshold}%. Điểm cao vẫn cần duyệt nếu có ứng viên cạnh tranh chênh không quá 5 điểm.</p>
+        <p className="text-xs text-slate-600 mt-1">Chỉ đề xuất ghép chưa chắc chắn mới cần chấp thuận hoặc từ chối. Ngưỡng lần chạy: {config.fuzzyConfirmThreshold}% – {config.fuzzyHighThreshold}%. Điểm cao vẫn cần duyệt nếu có ứng viên cạnh tranh chênh không quá 5 điểm hoặc thiếu thông tin phân biệt tập, ấn bản, kiểu bìa hay ngôn ngữ.</p>
         <p className="text-xs text-slate-600 mt-1">Điểm tương đồng văn bản không phải độ chính xác liên kết. Màu thể hiện trạng thái chờ duyệt, đã chấp thuận hoặc đã từ chối.</p>
       </div>
 
@@ -53,6 +53,7 @@ export function HitlWorkbenchTab({ pendingConfirmations, manualConfirmations, on
                 </div>
               </div>
               <div className="flex items-center flex-wrap gap-2">
+                {item.matchReason === 'INCOMPLETE_IDENTITY' && <p className="w-full text-xs text-amber-800">Một bên còn thiếu thông tin định danh sách. Cần đối chiếu ấn bản/biến thể trước khi chấp thuận; điểm tên cao chưa đủ xác nhận cùng sản phẩm.</p>}
                 <button type="button" aria-pressed={manual?.decision === "ACCEPT"} onClick={() => onManualDecision(item.rowIndex, "ACCEPT", item)} className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded border border-emerald-300 text-emerald-800 hover:bg-emerald-50"><Check size={14} />Chấp thuận ghép</button>
                 <button type="button" aria-pressed={manual?.decision === "REJECT"} onClick={() => onManualDecision(item.rowIndex, "REJECT", item)} className="inline-flex items-center gap-1 px-3 py-2 text-xs rounded border border-slate-300 hover:bg-slate-50"><X size={14} />Từ chối ghép</button>
                 {manual && <span className="inline-flex items-center gap-1 text-xs text-slate-600"><CheckCircle2 size={14} />{manual.decision === "ACCEPT" ? "Đã chấp thuận" : "Đã từ chối — giữ dữ liệu nguồn"}</span>}
@@ -68,7 +69,7 @@ export function HitlWorkbenchTab({ pendingConfirmations, manualConfirmations, on
         {unlinked.map(item => <div key={item.rowIndex} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
           <SourceRecord item={item} />
           <p className="text-xs text-slate-600">Được giữ riêng trong dữ liệu tích hợp; chưa xác lập liên kết.</p>
-          {item.matchReason === 'VARIANT_CONFLICT' && <p className="text-xs text-amber-800">Mã có trong danh mục nhưng biến thể/Combo không tương thích. Muốn tách Combo cần danh sách sách thành phần, số lượng và quy tắc phân bổ giá; hệ thống không tự đoán.</p>}
+          {item.matchReason === 'VARIANT_CONFLICT' && <p className="text-xs text-amber-800">Có mã hoặc ứng viên trong danh mục nhưng thông tin tập, ấn bản, kiểu bìa, ngôn ngữ hoặc Combo không tương thích. Cần kiểm tra metadata; nếu là Combo, chỉ tách khi có danh sách thành phần, số lượng và quy tắc phân bổ giá.</p>}
         </div>)}
       </section>}
     </div>

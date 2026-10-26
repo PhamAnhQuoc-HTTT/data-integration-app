@@ -1,7 +1,7 @@
 /**
  * Data Quality Rules — phát hiện lỗi và PHÂN LOẠI theo 3 mức xử lý an toàn:
  *
- *   AUTO_FIXED         : lỗi có quy tắc chắc chắn 100%, không cần suy luận (áp dụng ở bước normalize)
+ *   AUTO_FIXED         : thao tác theo quy tắc xác định ở bước normalize; cần GT để đánh giá đúng/sai ngữ nghĩa
  *   NEEDS_CONFIRMATION : có đề xuất sửa nhưng cần người dùng xác nhận (fuzzy match, nghi trùng lặp)
  *   FLAGGED_ONLY       : chỉ gắn cờ, không đề xuất — cần phán đoán nghiệp vụ (giá bất thường, thiếu dữ liệu)
  *
@@ -10,6 +10,7 @@
  */
 import { normalizeNumber, isValidDate, normalizeChannel, normalizeOrderStatus } from "./normalize";
 import { bookConflict, bookVariantKey } from './bookMatching';
+import { annotateDuplicateReview } from './transactionIdentity';
 
 const PRICE_DEVIATION_THRESHOLD = 0.3; // lệch > 30% so với giá chuẩn -> gắn cờ
 
@@ -357,18 +358,13 @@ export function checkSynonymConflict(rows) {
 // ============================================================================
 
 export function checkDuplicates(rows) {
-  const issues = [];
-  const seen = new Map(); 
-  rows.forEach((row, i) => {
-    if (!row.ma_don) return;
-    const key = JSON.stringify([row.__source, row.ma_don, row.ma_dinh_danh || row.ten_sp, row.ngay, normalizeNumber(row.so_luong), normalizeNumber(row.gia), row.kenh, row.trang_thai]);
-    if (seen.has(key)) {
-      issues.push({ rowIndex: i, group: "technical", severity: "NEEDS_CONFIRMATION", detail: `Trùng mã đơn "${row.ma_don}" với dòng #${seen.get(key) + 1}` });
-    } else {
-      seen.set(key, i);
-    }
+  return annotateDuplicateReview(rows).flatMap((row, i) => {
+    if (row.duplicateStatus === 'NONE' || (row.duplicateStatus === 'POSSIBLE_DUPLICATE' && row.duplicateFirst)) return [];
+    return [{ rowIndex: i, group: 'technical', severity: 'NEEDS_CONFIRMATION',
+      detail: row.duplicateStatus === 'REVIEW_REQUIRED'
+        ? `Lặp khóa dòng đơn "${row.ma_don}" trong cùng hệ thống/shop; giữ chờ đối soát snapshot, chưa tự chọn bản giữ.`
+        : `Nghi trùng mã đơn "${row.ma_don}"; có thể là nhiều dòng hợp lệ hoặc file xuất chồng lấn. Chưa tự loại tiền.` }];
   });
-  return issues;
 }
 
 export function checkReferentialIntegrity(rows) {

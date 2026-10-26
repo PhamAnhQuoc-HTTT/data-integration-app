@@ -1,6 +1,6 @@
 /**
  * Chiến Lược 3: Ghép cặp tham lam theo điểm (Greedy Bipartite Matching Strategy)
- * Giải quyết triệt để lỗi tranh chấp khớp giữa các nguồn đơn hàng và tự động tổng hợp Master Catalog.
+ * Chọn cặp không dùng lại thực thể theo điểm và tổng hợp Catalog đại diện; không bảo đảm tối ưu toàn cục.
  */
 import { normalizeTextForMatching } from "../normalize";
 import { bookEntityKey } from '../bookMatching';

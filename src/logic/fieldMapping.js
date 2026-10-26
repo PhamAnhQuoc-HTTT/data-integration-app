@@ -12,8 +12,8 @@ export const FIELD_PATTERNS = {
   ten_ncc: ["ten ncc", "nha cung cap", "supplier", "vendor"],
   ma_ncc: ["ma ncc", "supplier id"],
   tac_gia: ["tac gia", "author"],
-  so_luong: ["so luong", "sl", "qty", "quantity", "count", "amount"],
-  gia: ["gia ban", "don gia", "gia", "price", "unit price", "gia bia", "gia niem yet", "cost", "selling price"],
+  so_luong: ["so luong", "sl", "qty", "quantity", "units", "count"],
+  gia: ["gia ban", "don gia", "gia", "price", "unit price", "selling price"],
   ma_dinh_danh: ["barcode", "isbn", "ma vach", "upc", "ean", "sku id", "sku", "ma dinh danh", "ma san pham chuan", "ma sp chuan", "ma san pham", "ma sp", "item code"],
   kenh: ["kenh", "channel", "chi nhanh", "nha sach", "cua hang", "platform"],
   danh_muc: ["the loai", "danh muc", "category", "genre", "phan loai"],
@@ -28,6 +28,27 @@ export const FIELD_LABELS = {
   kenh: "Kênh", danh_muc: "Danh mục", gia_chuan: "Giá chuẩn", trang_thai: "Trạng thái",
   ten_ncc: "Nhà cung cấp", ma_ncc: "Mã NCC", tac_gia: "Tác giả", gia_goc: "Giá gốc nguồn", gia_bia: "Giá bìa",
   gia_dong: "Tổng tiền sản phẩm sau giảm giá", hoan_tra: "Trạng thái trả hàng/hoàn tiền", phan_loai: "Biến thể sách",
+  sourceSystem: 'Hệ thống nguồn', shopId: 'Mã shop', sourceOrderLineId: 'Mã dòng đơn', sourceCodeType: 'Loại mã nguồn',
+};
+
+// Reserve explicit semantic matches before generic scoring. A sales amount is
+// never a quantity, nor a purchase cost/list price a transaction selling price.
+const EXPLICIT_FIELDS = {
+  ma_don: ['order number', 'order id', 'ma don hang', 'invoice id'],
+  ma_dinh_danh: ['isbn 13', 'isbn', 'seller sku', 'sku san pham', 'item code'],
+  ten_sp: ['item name', 'product name', 'ten san pham'],
+  ngay: ['thoi gian dat hang', 'create time', 'created time', 'sale date', 'order date'],
+  trang_thai: ['order status', 'trang thai don hang', 'status'],
+  gia: ['gia uu dai', 'unit price', 'selling price'],
+  gia_goc: ['gia goc', 'sku unit original price', 'original price'],
+  gia_chuan: ['gia chuan', 'gia bia', 'gia niem yet', 'list price'],
+  phan_loai: ['ten phan loai hang', 'variation'],
+  hoan_tra: ['trang thai tra hang/hoan tien', 'cancelation/return status', 'cancellation/return status', 'return status', 'refund status', 'return/refund status'],
+  gia_dong: ['sku subtotal after discount', 'item subtotal'],
+  sourceOrderLineId: ['order item id', 'order line id', 'invoice line id', 'ma dong don hang'],
+  shopId: ['shop id', 'seller id', 'ma shop'],
+  sourceSystem: ['source system', 'he thong nguon'],
+  sourceCodeType: ['source code type', 'identifier type', 'loai ma nguon'],
 };
 
 /**
@@ -46,13 +67,19 @@ export function detectFields(headers) {
   );
   const mapping = { branchColumns: [] };
   const assignedCols = new Set();
+  for (const [field, aliases] of Object.entries(EXPLICIT_FIELDS)) {
+    const index = aliases.map(a => norm.indexOf(a)).find(i => i >= 0 && !assignedCols.has(i));
+    mapping[field] = index ?? -1;
+    if (index !== undefined) assignedCols.add(index);
+  }
 
   // Tính điểm khớp giữa 1 header chuẩn hóa và 1 field
   const computeScore = (headerNorm, field, patterns) => {
     if (!headerNorm) return 0;
     if (field === 'kenh' && /voucher|discount|giam gia|tro gia|shipping/.test(headerNorm)) return 0;
     if (field === 'gia' && /tong|total|subtotal|discount|fee|voucher|original|gia goc|uu dai/.test(headerNorm)) return 0;
-    if (field === 'ma_don' && /item|substatus|sub status/.test(headerNorm)) return 0;
+    if (field === 'ma_don' && /item|substatus|sub status|amount|total|quantity|count|shipping|payment/.test(headerNorm)) return 0;
+    if (field === 'so_luong' && /amount|price|fee|total|stock|inventory|ton kho|ton dau|cost/.test(headerNorm)) return 0;
     if (field === "gia" && /gia bia|gia niem yet|gia chuan|list price/.test(headerNorm)) return 0;
     if (field === "ma_don" && /status|date|time|trang thai/.test(headerNorm)) return 0;
 
@@ -92,6 +119,7 @@ export function detectFields(headers) {
   ];
 
   for (const field of fieldPriority) {
+    if (mapping[field] >= 0) continue;
     const patterns = FIELD_PATTERNS[field] || [];
     let bestIdx = -1;
     let maxScore = 0;
@@ -134,24 +162,9 @@ export function detectFields(headers) {
     }
   });
 
-  // Explicit export schemas take precedence over generic substring matches.
-  const pick = (field, aliases) => {
-    const index = aliases.map(a => norm.indexOf(a)).find(i => i >= 0);
-    if (index !== undefined) mapping[field] = index;
-  };
-  pick('ma_don', ['order number', 'order id', 'ma don hang', 'invoice id']);
-  pick('ma_dinh_danh', ['isbn 13', 'isbn', 'seller sku', 'sku san pham', 'item code']);
-  pick('ten_sp', ['item name', 'product name', 'ten san pham']);
-  pick('ngay', ['thoi gian dat hang', 'create time', 'created time', 'sale date']);
-  pick('trang_thai', ['order status', 'trang thai don hang', 'status']);
-  pick('gia', ['gia uu dai', 'unit price', 'selling price']);
-  pick('gia_goc', ['gia goc', 'sku unit original price', 'original price']);
-  mapping.gia_bia = -1;
-  pick('gia_bia', ['gia bia', 'gia niem yet', 'list price']);
-  pick('phan_loai', ['ten phan loai hang', 'variation']);
-  pick('hoan_tra', ['trang thai tra hang/hoan tien', 'cancelation/return status', 'cancellation/return status', 'return status', 'refund status', 'return/refund status']);
-  // These are product-line amounts, not payment totals or shipping fees.
-  pick('gia_dong', ['sku subtotal after discount', 'item subtotal']);
+  // An intentional read-only alias: a list price can serve both reference
+  // fields, but cannot be reused as a sales quantity/price by generic matching.
+  mapping.gia_bia = ['gia bia', 'gia niem yet', 'list price'].map(a => norm.indexOf(a)).find(i => i >= 0) ?? -1;
   if (mapping.gia_dong >= 0) mapping.gia = -1;
   return mapping;
 }
@@ -180,6 +193,10 @@ export function buildRows(dataRows, mapping) {
       gia_dong: mapping.gia_dong >= 0 ? amount : null,
       __priceBasis: mapping.gia_dong >= 0 ? 'PRODUCT_LINE_AFTER_DISCOUNT' : 'UNIT_PRICE',
       hoan_tra: normalizeText(get(r, 'hoan_tra')), phan_loai: normalizeText(get(r, 'phan_loai')) };
+    metadata.sourceSystem = normalizeText(get(r, 'sourceSystem'));
+    metadata.shopId = normalizeText(get(r, 'shopId'));
+    metadata.sourceOrderLineId = normalizeText(get(r, 'sourceOrderLineId'));
+    metadata.sourceCodeType = normalizeText(get(r, 'sourceCodeType'));
 
     // Trường hợp 1: File có các cột chi nhánh phân phối (Wide format như FAHASA)
     if (mapping.branchColumns && mapping.branchColumns.length > 0) {
